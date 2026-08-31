@@ -1,5 +1,7 @@
 .env
+.venv/
 classes/__pycache__
 web/__pycache__
+tests/__pycache__
 __pycache__
 matriz_distancia.csv
