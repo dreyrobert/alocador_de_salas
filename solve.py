@@ -13,38 +13,130 @@ from lns_fix_and_optimize import (
     parse_solucao_x,
 )
 import argparse
+from dataclasses import dataclass
 import json
 import gurobipy as gp
 from gurobipy import GRB
 
-def main(
+
+@dataclass
+class InstanciaAlocacao:
+    salas: dict
+    salas_lista: list
+    matriz_dist: list
+    disciplinas: dict
+    horarios: dict
+    fases: dict
+    cursos: dict
+
+
+@dataclass
+class ModeloAlocacao:
+    modelo: gp.Model
+    instancia: InstanciaAlocacao
+    x: dict
+    y: dict
+    w: dict
+    t: dict
+    z: dict
+    v: dict
+    restricoes_removidas: set
+    resumo_lns: dict | None
+    disciplinas_livres: set
+
+
+def carregar_instancia(
     arquivo_horarios,
     arquivo_salas,
     arquivo_salas_preferenciais,
+):
+    salas = ExtraiSalas(arquivo_salas).extrai_salas()
+    salas_lista = list(salas.keys())
+    matriz_dist = GeraMatrizDistancia(salas).gera_matriz()
+    disciplinas, horarios, fases, cursos = ExtraiHorariosAula(
+        arquivo_horarios,
+        arquivo_salas_preferenciais,
+    ).extrai_horarios_aula()
+
+    return InstanciaAlocacao(
+        salas=salas,
+        salas_lista=salas_lista,
+        matriz_dist=matriz_dist,
+        disciplinas=disciplinas,
+        horarios=horarios,
+        fases=fases,
+        cursos=cursos,
+    )
+
+
+def selecionar_disciplinas_livres(
+    disciplinas,
+    disciplinas_livres=None,
+    fase_livre=None,
+    curso_livre=None,
+):
+    selecionadas = set(disciplinas_livres or [])
+    if fase_livre:
+        curso, fase = fase_livre
+        selecionadas.update(disciplinas_da_fase(disciplinas, curso, fase))
+    if curso_livre:
+        selecionadas.update(disciplinas_do_curso(disciplinas, curso_livre))
+    return selecionadas
+
+
+def aplicar_start_incumbente_x(x, solucao_incumbente_x, disciplinas_livres):
+    if solucao_incumbente_x is None:
+        return None
+
+    if disciplinas_livres:
+        return aplicar_start_e_fixacao_x(
+            x,
+            solucao_incumbente_x,
+            disciplinas_livres,
+        )
+
+    resumo_lns = {
+        "variaveis_x_total": len(x),
+        "variaveis_x_livres": len(x),
+        "variaveis_x_fixadas": 0,
+        "valores_start_definidos": 0,
+        "chaves_sem_valor_incumbente": 0,
+    }
+    for chave, variavel in x.items():
+        valor = solucao_incumbente_x.get(chave)
+        if valor is None:
+            resumo_lns["chaves_sem_valor_incumbente"] += 1
+            continue
+        variavel.Start = valor
+        resumo_lns["valores_start_definidos"] += 1
+
+    return resumo_lns
+
+
+def construir_modelo(
+    instancia,
     restricoes_removidas=None,
-    parametros_gurobi=None,
-    gerar_planilhas=True,
-    arquivo_solucao=None,
-    arquivo_solucao_incumbente=None,
+    solucao_incumbente_x=None,
     disciplinas_livres=None,
     fase_livre=None,
     curso_livre=None,
 ):
     restricoes_removidas = set(restricoes_removidas or [])
-    parametros_gurobi = parametros_gurobi or {}
+    disciplinas_livres = selecionar_disciplinas_livres(
+        instancia.disciplinas,
+        disciplinas_livres=disciplinas_livres,
+        fase_livre=fase_livre,
+        curso_livre=curso_livre,
+    )
 
-    salas = ExtraiSalas(arquivo_salas).extrai_salas()
-    salasLista = list(salas.keys())
-    matriz_dist = GeraMatrizDistancia(salas).gera_matriz()
-    disciplinas,horarios,fases,cursos = ExtraiHorariosAula(arquivo_horarios,arquivo_salas_preferenciais).extrai_horarios_aula()
+    salas = instancia.salas
+    salasLista = instancia.salas_lista
+    matriz_dist = instancia.matriz_dist
+    disciplinas = instancia.disciplinas
+    horarios = instancia.horarios
+    fases = instancia.fases
+    cursos = instancia.cursos
 
-    disciplinas_livres = set(disciplinas_livres or [])
-    if fase_livre:
-        curso, fase = fase_livre
-        disciplinas_livres.update(disciplinas_da_fase(disciplinas, curso, fase))
-    if curso_livre:
-        disciplinas_livres.update(disciplinas_do_curso(disciplinas, curso_livre))
- 
     # Criando o modelo
     m = gp.Model()
 
@@ -62,30 +154,11 @@ def main(
             for s in salas:
                 x[d, s, h] = m.addVar(vtype=gp.GRB.BINARY, name=f"x[{d},{s},{h}]")
 
-    resumo_lns = None
-    if arquivo_solucao_incumbente:
-        solucao_incumbente_x = parse_solucao_x(arquivo_solucao_incumbente)
-        if disciplinas_livres:
-            resumo_lns = aplicar_start_e_fixacao_x(
-                x,
-                solucao_incumbente_x,
-                disciplinas_livres,
-            )
-        else:
-            resumo_lns = {
-                "variaveis_x_total": len(x),
-                "variaveis_x_livres": len(x),
-                "variaveis_x_fixadas": 0,
-                "valores_start_definidos": 0,
-                "chaves_sem_valor_incumbente": 0,
-            }
-            for chave, variavel in x.items():
-                valor = solucao_incumbente_x.get(chave)
-                if valor is None:
-                    resumo_lns["chaves_sem_valor_incumbente"] += 1
-                    continue
-                variavel.Start = valor
-                resumo_lns["valores_start_definidos"] += 1
+    resumo_lns = aplicar_start_incumbente_x(
+        x,
+        solucao_incumbente_x,
+        disciplinas_livres,
+    )
 
     y = m.addVars(disciplinas,salas,vtype=gp.GRB.INTEGER, name="y")
     w = m.addVars(salasLista,cursos,vtype=gp.GRB.BINARY,name="w")
@@ -184,6 +257,25 @@ def main(
         c8 = m.addConstrs(
             t[si,sj,c] >= (w[si,c]+w[sj,c] - 1) for si in salasLista for sj in salasLista if salasLista.index(si) < salasLista.index(sj) for c in cursos
         )
+
+    return ModeloAlocacao(
+        modelo=m,
+        instancia=instancia,
+        x=x,
+        y=y,
+        w=w,
+        t=t,
+        z=z,
+        v=v,
+        restricoes_removidas=restricoes_removidas,
+        resumo_lns=resumo_lns,
+        disciplinas_livres=disciplinas_livres,
+    )
+
+
+def resolver_modelo(modelo_alocacao, parametros_gurobi=None, arquivo_solucao=None):
+    parametros_gurobi = parametros_gurobi or {}
+    m = modelo_alocacao.modelo
     
     m.setParam('VarsName', 1)
     m.setParam(GRB.Param.TimeLimit, 25200) # Tempo limite de 7 horas
@@ -206,7 +298,7 @@ def main(
         print("Solução -> não <- ótima.")
 
 
-    resultado = {
+    return {
         "status": m.status,
         "status_nome": _nome_status(m.status),
         "solucoes": m.SolCount,
@@ -214,20 +306,83 @@ def main(
         "bound": m.ObjBound if m.SolCount > 0 else None,
         "gap": m.MIPGap if m.SolCount > 0 else None,
         "tempo": m.Runtime,
-        "restricoes_removidas": sorted(restricoes_removidas),
+        "restricoes_removidas": sorted(modelo_alocacao.restricoes_removidas),
         "parametros_gurobi": parametros_gurobi,
         "arquivo_solucao": arquivo_solucao if m.SolCount > 0 else None,
-        "lns": resumo_lns,
-        "disciplinas_livres": sorted(disciplinas_livres),
+        "lns": modelo_alocacao.resumo_lns,
+        "disciplinas_livres": sorted(modelo_alocacao.disciplinas_livres),
     }
+
+
+def gerar_planilhas_saida(modelo_alocacao):
+    instancia = modelo_alocacao.instancia
+    conflitos = VerificaSolucao(
+        instancia.disciplinas,
+        instancia.salas,
+        instancia.horarios,
+        modelo_alocacao.x,
+    ).verifica_conflito_turno()
+
+    GeraPlanilhaSaida(
+        instancia.disciplinas,
+        instancia.salas,
+        instancia.horarios,
+        modelo_alocacao.x,
+        "./web/static/dados/",
+        "planilha_alocacoes.xlsx",
+    ).cria_tabela_alocacoes(conflitos)
+    GeraPlanilhaSaida(
+        instancia.disciplinas,
+        instancia.salas,
+        instancia.horarios,
+        modelo_alocacao.x,
+        "./web/static/dados/",
+        "planilha_alocacoes.xlsx",
+    ).exporta_alocacoes()
+
+
+def main(
+    arquivo_horarios,
+    arquivo_salas,
+    arquivo_salas_preferenciais,
+    restricoes_removidas=None,
+    parametros_gurobi=None,
+    gerar_planilhas=True,
+    arquivo_solucao=None,
+    arquivo_solucao_incumbente=None,
+    disciplinas_livres=None,
+    fase_livre=None,
+    curso_livre=None,
+):
+    instancia = carregar_instancia(
+        arquivo_horarios,
+        arquivo_salas,
+        arquivo_salas_preferenciais,
+    )
+
+    solucao_incumbente_x = None
+    if arquivo_solucao_incumbente:
+        solucao_incumbente_x = parse_solucao_x(arquivo_solucao_incumbente)
+
+    modelo_alocacao = construir_modelo(
+        instancia,
+        restricoes_removidas=restricoes_removidas,
+        solucao_incumbente_x=solucao_incumbente_x,
+        disciplinas_livres=disciplinas_livres,
+        fase_livre=fase_livre,
+        curso_livre=curso_livre,
+    )
+
+    resultado = resolver_modelo(
+        modelo_alocacao,
+        parametros_gurobi=parametros_gurobi,
+        arquivo_solucao=arquivo_solucao,
+    )
 
     if not gerar_planilhas:
         return resultado
 
-    conflitos = VerificaSolucao(disciplinas,salas,horarios,x).verifica_conflito_turno()
-
-    GeraPlanilhaSaida(disciplinas,salas,horarios,x,"./web/static/dados/","planilha_alocacoes.xlsx").cria_tabela_alocacoes(conflitos)
-    GeraPlanilhaSaida(disciplinas,salas,horarios,x,"./web/static/dados/","planilha_alocacoes.xlsx").exporta_alocacoes()
+    gerar_planilhas_saida(modelo_alocacao)
     return resultado
 
 
