@@ -5,11 +5,15 @@ from pathlib import Path
 from lns_fix_and_optimize import (
     alocacoes_por_disciplina_horario,
     aplicar_start_e_fixacao_x,
+    cursos_da_instancia,
     disciplinas_da_fase,
     disciplinas_do_curso,
     disciplinas_por_demanda,
+    parse_objetivo_sol,
     parse_solucao_x,
     pontuar_disciplinas_por_penalidade,
+    salvar_historico_csv,
+    solucao_melhorou,
     vizinhanca_por_fase,
     vizinhanca_por_penalidade_atual,
 )
@@ -154,6 +158,46 @@ class TestLnsFixAndOptimize(unittest.TestCase):
         self.assertEqual(resumo["variaveis_x_fixadas"], 2)
         self.assertEqual(resumo["chaves_sem_valor_incumbente"], 1)
 
+    def test_parse_objetivo_sol_recupera_valor_do_cabecalho(self):
+        conteudo = "# Objective value = 186294.5\nx[D1,101-A,Horario_2_1] 1\n"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            caminho = Path(temp_dir) / "teste.sol"
+            caminho.write_text(conteudo, encoding="utf-8")
+            self.assertEqual(parse_objetivo_sol(caminho), 186294.5)
+
+    def test_solucao_melhorou_valida_apenas_reducao_estrita_de_custo(self):
+        atual = {"solucoes": 1, "objetivo": 100.0}
+        candidata_melhor = {"solucoes": 1, "objetivo": 95.0}
+        candidata_pior = {"solucoes": 1, "objetivo": 105.0}
+        candidata_igual = {"solucoes": 1, "objetivo": 100.0}
+        candidata_inviavel = {"solucoes": 0, "objetivo": None}
+
+        self.assertTrue(solucao_melhorou(atual, candidata_melhor))
+        self.assertFalse(solucao_melhorou(atual, candidata_pior))
+        self.assertFalse(solucao_melhorou(atual, candidata_igual))
+        self.assertFalse(solucao_melhorou(atual, candidata_inviavel))
+        self.assertTrue(solucao_melhorou(None, candidata_melhor))
+
+    def test_cursos_da_instancia_extrai_ordenado(self):
+        class InstanciaComCursos:
+            cursos = {"MED": object(), "CC": object(), "ADM": object()}
+
+        self.assertEqual(cursos_da_instancia(InstanciaComCursos()), ["ADM", "CC", "MED"])
+
+    def test_salvar_historico_csv_grava_arquivo(self):
+        historico = [
+            {"iteracao": 1, "curso": "CC", "melhorou": True, "objetivo": 100.0},
+            {"iteracao": 2, "curso": "ADM", "melhorou": False, "objetivo": 100.0},
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            caminho = Path(temp_dir) / "historico.csv"
+            salvar_historico_csv(historico, caminho)
+            self.assertTrue(caminho.exists())
+            conteudo = caminho.read_text(encoding="utf-8")
+            self.assertIn("iteracao,curso,melhorou,objetivo", conteudo)
+            self.assertIn("1,CC,True,100.0", conteudo)
+
 
 if __name__ == "__main__":
     unittest.main()
+

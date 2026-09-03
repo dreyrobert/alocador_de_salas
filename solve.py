@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from classes.Horario import Horario
 from classes.Disciplina import Disciplina
 from classes.Sala import Sala
@@ -15,8 +17,13 @@ from lns_fix_and_optimize import (
 import argparse
 from dataclasses import dataclass
 import json
-import gurobipy as gp
-from gurobipy import GRB
+try:
+    import gurobipy as gp
+    from gurobipy import GRB
+except ModuleNotFoundError:
+    gp = None
+    GRB = None
+
 
 
 @dataclass
