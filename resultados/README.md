@@ -1,0 +1,36 @@
+# Organizacao dos resultados
+
+Esta pasta guarda arquivos gerados por execucoes do modelo e por scripts de
+analise. A separacao abaixo evita misturar solucoes operacionais, candidatos
+temporarios e experimentos.
+
+## `fix_and_optimize/`
+
+Saidas padrao de `main_fix_and_optimize.py`.
+
+- `primeira_solucao_fix_and_optimize.sol`: solucao inicial gerada antes das
+  passadas por curso.
+- `melhor_solucao_fix_and_optimize.sol`: melhor solucao encontrada pela rotina.
+- `solucao_fix_and_optimize_curso.sol`: saida de uma reotimizacao isolada pela
+  etapa `curso`.
+- `historico_fix_and_optimize.csv` e `historico_fix_and_optimize.json`:
+  historico das tentativas por curso.
+
+## `fix_and_optimize/candidatos/`
+
+Arquivos `.sol` candidatos gerados durante uma passada por cursos.
+
+Cada arquivo `candidato_curso_<CURSO>.sol` e a solucao produzida ao liberar
+temporariamente as disciplinas daquele curso e fixar as demais. Se o objetivo
+melhorar, esse candidato e copiado para a melhor solucao; se nao melhorar, ele
+fica apenas como registro/debug da tentativa.
+
+## `experimentos/`
+
+Resultados de rodadas comparativas ou execucoes nomeadas. Quando o experimento
+for especifico de um semestre, use uma subpasta, por exemplo `2024_1/`.
+
+## `diagnosticos/`
+
+Planilhas e relatorios auxiliares para analisar solucoes, vizinhancas e metricas
+do problema.

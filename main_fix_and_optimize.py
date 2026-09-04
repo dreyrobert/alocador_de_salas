@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import random
 import shutil
 import time
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable
 
 from solve import (
     InstanciaAlocacao,
@@ -27,12 +26,13 @@ from lns_fix_and_optimize import (
 ARQUIVO_HORARIOS_PADRAO = "./dados/horarios_2024_1.xlsx"
 ARQUIVO_SALAS_PADRAO = "./dados/salas_2024_1.csv"
 ARQUIVO_PREFERENCIAIS_PADRAO = "./dados/salas_preferenciais_2024.1.xlsx"
-ARQUIVO_SOLUCAO_INICIAL_PADRAO = "./resultados/primeira_solucao_fix_and_optimize.sol"
-ARQUIVO_SOLUCAO_CURSO_PADRAO = "./resultados/solucao_fix_and_optimize_curso.sol"
-ARQUIVO_MELHOR_SOLUCAO_PADRAO = "./resultados/melhor_solucao_fix_and_optimize.sol"
-ARQUIVO_HISTORICO_CSV_PADRAO = "./resultados/historico_fix_and_optimize.csv"
-ARQUIVO_HISTORICO_JSON_PADRAO = "./resultados/historico_fix_and_optimize.json"
-PASTA_CANDIDATOS_PADRAO = "./resultados/candidatos"
+PASTA_FIX_AND_OPTIMIZE_PADRAO = "./resultados/fix_and_optimize"
+ARQUIVO_SOLUCAO_INICIAL_PADRAO = f"{PASTA_FIX_AND_OPTIMIZE_PADRAO}/primeira_solucao_fix_and_optimize.sol"
+ARQUIVO_SOLUCAO_CURSO_PADRAO = f"{PASTA_FIX_AND_OPTIMIZE_PADRAO}/solucao_fix_and_optimize_curso.sol"
+ARQUIVO_MELHOR_SOLUCAO_PADRAO = f"{PASTA_FIX_AND_OPTIMIZE_PADRAO}/melhor_solucao_fix_and_optimize.sol"
+ARQUIVO_HISTORICO_CSV_PADRAO = f"{PASTA_FIX_AND_OPTIMIZE_PADRAO}/historico_fix_and_optimize.csv"
+ARQUIVO_HISTORICO_JSON_PADRAO = f"{PASTA_FIX_AND_OPTIMIZE_PADRAO}/historico_fix_and_optimize.json"
+PASTA_CANDIDATOS_PADRAO = f"{PASTA_FIX_AND_OPTIMIZE_PADRAO}/candidatos"
 
 
 def parametros_primeira_solucao(
@@ -90,9 +90,7 @@ def gerar_primeira_solucao(
 
 def reotimizar_subproblema(
     arquivo_solucao_incumbente: str | Path | dict,
-    disciplinas_livres: Iterable[str] | Vizinhanca,
-    tipo_vizinhanca: str = "",
-    recurso: str = "",
+    vizinhanca: Vizinhanca,
     arquivo_horarios: str = ARQUIVO_HORARIOS_PADRAO,
     arquivo_salas: str = ARQUIVO_SALAS_PADRAO,
     arquivo_salas_preferenciais: str = ARQUIVO_PREFERENCIAIS_PADRAO,
@@ -104,15 +102,8 @@ def reotimizar_subproblema(
     resolver: Callable = resolver_modelo,
     ler_solucao: Callable = parse_solucao_x,
 ) -> dict:
-    """Reotimiza uma vizinhanca generica (motor base para qualquer vizinhanca)."""
-    if isinstance(disciplinas_livres, Vizinhanca):
-        tipo_vizinhanca = tipo_vizinhanca or disciplinas_livres.tipo
-        recurso = recurso or disciplinas_livres.recurso
-        disciplinas_liberadas = set(disciplinas_livres.disciplinas_liberadas)
-    else:
-        disciplinas_liberadas = set(disciplinas_livres)
-        tipo_vizinhanca = tipo_vizinhanca or "personalizada"
-        recurso = recurso or "personalizado"
+    """Reotimiza um subproblema mantendo fixo o que esta fora da vizinhanca."""
+    disciplinas_liberadas = set(vizinhanca.disciplinas_liberadas)
 
     if not disciplinas_liberadas:
         raise ValueError("A vizinhanca deve conter ao menos uma disciplina liberada.")
@@ -148,8 +139,8 @@ def reotimizar_subproblema(
         arquivo_solucao=arquivo_solucao_str,
     )
     resultado["etapa"] = "reotimizacao_subproblema"
-    resultado["tipo_vizinhanca"] = tipo_vizinhanca
-    resultado["recurso"] = recurso
+    resultado["tipo_vizinhanca"] = vizinhanca.tipo
+    resultado["recurso"] = vizinhanca.recurso
     resultado["disciplinas_livres_qtd"] = len(disciplinas_liberadas)
     return resultado
 
@@ -182,7 +173,7 @@ def reotimizar_vizinhanca_curso(
     vizinhanca = vizinhanca_por_curso(instancia.disciplinas, curso_livre)
     resultado = reotimizar_subproblema(
         arquivo_solucao_incumbente=arquivo_solucao_incumbente,
-        disciplinas_livres=vizinhanca,
+        vizinhanca=vizinhanca,
         arquivo_solucao=arquivo_solucao,
         tempo_subproblema=tempo_subproblema,
         instancia=instancia,
@@ -208,6 +199,7 @@ def executar_passada_por_cursos(
     construir: Callable = construir_modelo,
     resolver: Callable = resolver_modelo,
     ler_solucao: Callable = parse_solucao_x,
+    tempo_fim_total: float | None = None,
 ) -> tuple[dict, list[dict]]:
     """Executa uma passada completa de fix-and-optimize sobre a lista de cursos."""
     caminho_incumbente = Path(arquivo_solucao_incumbente)
@@ -236,6 +228,13 @@ def executar_passada_por_cursos(
     historico_passada: list[dict] = []
 
     for idx, curso in enumerate(cursos, start=1):
+        tempo_subproblema_efetivo = tempo_subproblema
+        if tempo_fim_total is not None:
+            tempo_restante = tempo_fim_total - time.time()
+            if tempo_restante <= 0:
+                break
+            tempo_subproblema_efetivo = min(tempo_subproblema, tempo_restante)
+
         arquivo_candidato = pasta_cand / f"candidato_curso_{curso}.sol"
         t0 = time.time()
 
@@ -244,7 +243,7 @@ def executar_passada_por_cursos(
             arquivo_solucao_incumbente=solucao_x_atual,
             curso_livre=curso,
             arquivo_solucao=str(arquivo_candidato),
-            tempo_subproblema=tempo_subproblema,
+            tempo_subproblema=tempo_subproblema_efetivo,
             instancia=instancia,
             construir=construir,
             resolver=resolver,
@@ -275,6 +274,7 @@ def executar_passada_por_cursos(
             "melhorou": melhorou,
             "objetivo_incumbente": incumbente_atual.get("objetivo"),
             "tempo_gasto_s": round(tempo_gasto, 2),
+            "tempo_limite_subproblema_s": round(tempo_subproblema_efetivo, 2),
         }
         historico_passada.append(registro)
 
@@ -285,7 +285,6 @@ def executar_fix_and_optimize_cursos(
     arquivo_horarios: str = ARQUIVO_HORARIOS_PADRAO,
     arquivo_salas: str = ARQUIVO_SALAS_PADRAO,
     arquivo_salas_preferenciais: str = ARQUIVO_PREFERENCIAIS_PADRAO,
-    arquivo_solucao_incumbente: str = "",
     arquivo_melhor_solucao: str = ARQUIVO_MELHOR_SOLUCAO_PADRAO,
     arquivo_log_csv: str = ARQUIVO_HISTORICO_CSV_PADRAO,
     arquivo_log_json: str = ARQUIVO_HISTORICO_JSON_PADRAO,
@@ -293,8 +292,7 @@ def executar_fix_and_optimize_cursos(
     tempo_heuristica_inicial: float = 300,
     tempo_subproblema: float = 60,
     tempo_total_maximo: float | None = None,
-    max_passadas: int = 1,
-    embaralhar_cursos: bool = False,
+    apenas_uma_passada: bool = False,
     carregar: Callable = carregar_instancia,
     construir: Callable = construir_modelo,
     resolver: Callable = resolver_modelo,
@@ -302,6 +300,11 @@ def executar_fix_and_optimize_cursos(
 ) -> dict:
     """Executa a rotina completa de fix-and-optimize iterando sobre os cursos."""
     t_inicio_total = time.time()
+    tempo_fim_total = (
+        t_inicio_total + tempo_total_maximo
+        if tempo_total_maximo is not None
+        else None
+    )
 
     instancia = carregar(
         arquivo_horarios,
@@ -309,24 +312,19 @@ def executar_fix_and_optimize_cursos(
         arquivo_salas_preferenciais,
     )
 
-    caminho_incumbente = Path(arquivo_solucao_incumbente) if arquivo_solucao_incumbente else None
-    if caminho_incumbente and caminho_incumbente.exists():
-        solucao_base = str(caminho_incumbente)
-        obj_inicial = parse_objetivo_sol(caminho_incumbente)
-    else:
-        resultado_inicial = gerar_primeira_solucao(
-            arquivo_horarios=arquivo_horarios,
-            arquivo_salas=arquivo_salas,
-            arquivo_salas_preferenciais=arquivo_salas_preferenciais,
-            arquivo_solucao=ARQUIVO_SOLUCAO_INICIAL_PADRAO,
-            tempo_modelo=tempo_modelo_inicial,
-            tempo_heuristica=tempo_heuristica_inicial,
-            carregar=lambda *args: instancia,
-            construir=construir,
-            resolver=resolver,
-        )
-        solucao_base = resultado_inicial.get("arquivo_solucao", ARQUIVO_SOLUCAO_INICIAL_PADRAO)
-        obj_inicial = resultado_inicial.get("objetivo")
+    resultado_inicial = gerar_primeira_solucao(
+        arquivo_horarios=arquivo_horarios,
+        arquivo_salas=arquivo_salas,
+        arquivo_salas_preferenciais=arquivo_salas_preferenciais,
+        arquivo_solucao=ARQUIVO_SOLUCAO_INICIAL_PADRAO,
+        tempo_modelo=tempo_modelo_inicial,
+        tempo_heuristica=tempo_heuristica_inicial,
+        carregar=lambda *args: instancia,
+        construir=construir,
+        resolver=resolver,
+    )
+    solucao_base = resultado_inicial.get("arquivo_solucao", ARQUIVO_SOLUCAO_INICIAL_PADRAO)
+    obj_inicial = resultado_inicial.get("objetivo")
 
     caminho_melhor = Path(arquivo_melhor_solucao)
     caminho_melhor.parent.mkdir(parents=True, exist_ok=True)
@@ -343,14 +341,13 @@ def executar_fix_and_optimize_cursos(
 
     passadas_feitas = 0
     melhorias_totais = 0
+    passada = 1
 
-    for passada in range(1, max_passadas + 1):
+    while True:
         if tempo_total_maximo and (time.time() - t_inicio_total) >= tempo_total_maximo:
             break
 
         cursos_rodada = list(cursos)
-        if embaralhar_cursos:
-            random.shuffle(cursos_rodada)
 
         incumbente_passada, hist_passada = executar_passada_por_cursos(
             arquivo_solucao_incumbente=caminho_melhor,
@@ -363,6 +360,7 @@ def executar_fix_and_optimize_cursos(
             construir=construir,
             resolver=resolver,
             ler_solucao=ler_solucao,
+            tempo_fim_total=tempo_fim_total,
         )
 
         melhorias_na_passada = sum(1 for reg in hist_passada if reg["melhorou"])
@@ -371,9 +369,13 @@ def executar_fix_and_optimize_cursos(
         incumbente_atual = incumbente_passada
         passadas_feitas += 1
 
+        if apenas_uma_passada:
+            break
+
         if melhorias_na_passada == 0:
             # Otimo local alcancado com respeito a vizinhancas unicas por curso
             break
+        passada += 1
 
     if arquivo_log_csv:
         salvar_historico_csv(historico_total, arquivo_log_csv)
@@ -419,8 +421,6 @@ def main() -> dict:
     parser.add_argument("--salvar-solucao", default="")
     parser.add_argument("--solucao-incumbente", default="")
     parser.add_argument("--curso-livre", default="")
-    parser.add_argument("--max-passadas", type=int, default=1)
-    parser.add_argument("--embaralhar-cursos", action="store_true")
     parser.add_argument("--tempo-modelo", type=float, default=300)
     parser.add_argument("--tempo-heuristica", type=float, default=300)
     parser.add_argument("--tempo-subproblema", type=float, default=300)
@@ -440,12 +440,10 @@ def main() -> dict:
             tempo_subproblema=args.tempo_subproblema,
         )
     elif args.etapa in ("passada-cursos", "loop-cursos"):
-        max_pass = 1 if args.etapa == "passada-cursos" else args.max_passadas
         resultado = executar_fix_and_optimize_cursos(
             arquivo_horarios=args.horarios,
             arquivo_salas=args.salas,
             arquivo_salas_preferenciais=args.preferenciais,
-            arquivo_solucao_incumbente=args.solucao_incumbente,
             arquivo_melhor_solucao=args.salvar_solucao or ARQUIVO_MELHOR_SOLUCAO_PADRAO,
             arquivo_log_csv=args.log_csv,
             arquivo_log_json=args.log_json,
@@ -453,8 +451,7 @@ def main() -> dict:
             tempo_heuristica_inicial=args.tempo_heuristica,
             tempo_subproblema=args.tempo_subproblema,
             tempo_total_maximo=args.tempo_total,
-            max_passadas=max_pass,
-            embaralhar_cursos=args.embaralhar_cursos,
+            apenas_uma_passada=args.etapa == "passada-cursos",
         )
     else:
         resultado = gerar_primeira_solucao(

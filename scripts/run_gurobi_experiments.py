@@ -50,7 +50,8 @@ def main_cli():
     parser.add_argument("--append", action="store_true", help="Adiciona resultados ao CSV existente em vez de sobrescrever.")
     args = parser.parse_args()
 
-    saida = Path(args.saida or f"resultados_gurobi_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+    saida = Path(args.saida or f"resultados/experimentos/resultados_gurobi_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+    saida.parent.mkdir(parents=True, exist_ok=True)
     resultados = []
     todos_cenarios = cenarios(args.time_limit, args.no_rel_heur_time)
     if args.cenario:

@@ -1,6 +1,8 @@
 import tempfile
 import unittest
+import time
 from pathlib import Path
+from unittest.mock import patch
 
 from lns_fix_and_optimize import Vizinhanca
 from main_fix_and_optimize import (
@@ -132,7 +134,7 @@ class TestMainFixAndOptimize(unittest.TestCase):
 
         resultado = reotimizar_subproblema(
             arquivo_solucao_incumbente=solucao_dict,
-            disciplinas_livres=viz,
+            vizinhanca=viz,
             instancia="instancia_pre_carregada",
             arquivo_solucao=None,
             tempo_subproblema=60,
@@ -230,7 +232,11 @@ class TestMainFixAndOptimize(unittest.TestCase):
         with self.assertRaises(ValueError):
             reotimizar_subproblema(
                 arquivo_solucao_incumbente={},
-                disciplinas_livres=[],
+                vizinhanca=Vizinhanca(
+                    tipo="curso",
+                    recurso="CC",
+                    disciplinas_liberadas=frozenset(),
+                ),
                 instancia=InstanciaFake({}),
             )
 
@@ -287,6 +293,46 @@ class TestMainFixAndOptimize(unittest.TestCase):
             self.assertEqual(historico[1]["curso"], "ADM")
             self.assertTrue(melhor_sol.exists())
 
+    def test_executar_passada_por_cursos_limita_subproblema_ao_tempo_restante(self):
+        disciplinas = {
+            "D1": DisciplinaFake("CC", 1, 30, ["Horario_2_1"]),
+        }
+        instancia = InstanciaFake(disciplinas)
+        parametros_usados = []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            incumbente_sol = Path(temp_dir) / "primeira.sol"
+            incumbente_sol.write_text("# Objective value = 200.0\nx[D1,101-A,Horario_2_1] 1\n", encoding="utf-8")
+
+            def resolver_fake(modelo, parametros_gurobi=None, arquivo_solucao=None):
+                parametros_usados.append(parametros_gurobi)
+                if arquivo_solucao:
+                    Path(arquivo_solucao).write_text("# Objective value = 200.0\n", encoding="utf-8")
+                return {
+                    "status_nome": "OPTIMAL",
+                    "solucoes": 1,
+                    "objetivo": 200.0,
+                    "arquivo_solucao": arquivo_solucao,
+                    "lns": {"variaveis_x_livres": 5, "variaveis_x_fixadas": 95},
+                }
+
+            _, historico = executar_passada_por_cursos(
+                arquivo_solucao_incumbente=incumbente_sol,
+                instancia=instancia,
+                cursos=["CC"],
+                arquivo_melhor_solucao=Path(temp_dir) / "melhor.sol",
+                pasta_candidatos=Path(temp_dir) / "candidatos",
+                tempo_subproblema=300,
+                tempo_fim_total=time.time() + 10,
+                construir=lambda inst, **kwargs: "modelo",
+                resolver=resolver_fake,
+                ler_solucao=lambda arq: {("D1", "101-A", "Horario_2_1"): 1},
+            )
+
+        self.assertLess(parametros_usados[0]["TimeLimit"], 300)
+        self.assertLessEqual(parametros_usados[0]["TimeLimit"], 10)
+        self.assertLess(historico[0]["tempo_limite_subproblema_s"], 300)
+
     def test_executar_fix_and_optimize_cursos_loop_completo(self):
         disciplinas = {
             "D1": DisciplinaFake("CC", 1, 30, ["Horario_2_1"]),
@@ -295,11 +341,11 @@ class TestMainFixAndOptimize(unittest.TestCase):
         instancia.cursos = {"CC": object()}
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            incumbente_sol = Path(temp_dir) / "inicial.sol"
-            incumbente_sol.write_text("# Objective value = 300.0\nx[D1,101-A,Horario_2_1] 1\n", encoding="utf-8")
+            solucao_inicial = Path(temp_dir) / "inicial_gerada.sol"
             melhor_sol = Path(temp_dir) / "melhor.sol"
             log_csv = Path(temp_dir) / "log.csv"
             log_json = Path(temp_dir) / "log.json"
+            chamadas_resolver = []
 
             def carregar_fake(*args):
                 return instancia
@@ -308,39 +354,47 @@ class TestMainFixAndOptimize(unittest.TestCase):
                 return "modelo"
 
             def resolver_fake(modelo, parametros_gurobi=None, arquivo_solucao=None):
+                chamadas_resolver.append(arquivo_solucao)
+                objetivo = 300.0 if arquivo_solucao == str(solucao_inicial) else 250.0
                 if arquivo_solucao:
-                    Path(arquivo_solucao).write_text("# Objective value = 250.0\n", encoding="utf-8")
+                    Path(arquivo_solucao).write_text(
+                        f"# Objective value = {objetivo}\n",
+                        encoding="utf-8",
+                    )
                 return {
                     "status_nome": "OPTIMAL",
                     "solucoes": 1,
-                    "objetivo": 250.0,
+                    "objetivo": objetivo,
                     "arquivo_solucao": arquivo_solucao,
                     "lns": {"variaveis_x_livres": 10, "variaveis_x_fixadas": 90},
                 }
 
-            resultado = executar_fix_and_optimize_cursos(
-                arquivo_solucao_incumbente=str(incumbente_sol),
-                arquivo_melhor_solucao=str(melhor_sol),
-                arquivo_log_csv=str(log_csv),
-                arquivo_log_json=str(log_json),
-                max_passadas=2,
-                tempo_subproblema=5,
-                carregar=carregar_fake,
-                construir=construir_fake,
-                resolver=resolver_fake,
-                ler_solucao=lambda arq: {("D1", "101-A", "Horario_2_1"): 1},
-            )
+            with patch(
+                "main_fix_and_optimize.ARQUIVO_SOLUCAO_INICIAL_PADRAO",
+                str(solucao_inicial),
+            ):
+                resultado = executar_fix_and_optimize_cursos(
+                    arquivo_melhor_solucao=str(melhor_sol),
+                    arquivo_log_csv=str(log_csv),
+                    arquivo_log_json=str(log_json),
+                    tempo_subproblema=5,
+                    carregar=carregar_fake,
+                    construir=construir_fake,
+                    resolver=resolver_fake,
+                    ler_solucao=lambda arq: {("D1", "101-A", "Horario_2_1"): 1},
+                )
 
             self.assertEqual(resultado["etapa"], "fix_and_optimize_cursos")
             self.assertEqual(resultado["status"], "CONCLUIDO")
             self.assertEqual(resultado["objetivo_inicial"], 300.0)
             self.assertEqual(resultado["objetivo_final"], 250.0)
             self.assertEqual(resultado["ganho_absoluto"], 50.0)
+            self.assertEqual(resultado["passadas_executadas"], 2)
             self.assertEqual(resultado["melhorias_aceitas"], 1)
             self.assertTrue(log_csv.exists())
             self.assertTrue(log_json.exists())
+            self.assertEqual(chamadas_resolver[0], str(solucao_inicial))
 
 
 if __name__ == "__main__":
     unittest.main()
-

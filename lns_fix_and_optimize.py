@@ -7,6 +7,7 @@ responsavel apenas por construir e resolver o modelo.
 
 from __future__ import annotations
 
+import csv
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,7 @@ X_SOL_RE = re.compile(
     r"^x\[(?P<disciplina>[^,]+),(?P<sala>[^,]+),(?P<horario>[^\]]+)\]\s+"
     r"(?P<valor>[-0-9.]+)"
 )
+OBJETIVO_SOL_RE = re.compile(r"^# Objective value = (?P<objetivo>[-+0-9.eE]+)")
 
 
 @dataclass(frozen=True)
@@ -28,10 +30,6 @@ class Vizinhanca:
     recurso: str
     disciplinas_liberadas: frozenset[str]
     justificativa: str = ""
-
-    @property
-    def disciplinas(self) -> set[str]:
-        return set(self.disciplinas_liberadas)
 
 
 def parse_solucao_x(caminho_solucao: str | Path) -> dict[XKey, int]:
@@ -54,13 +52,14 @@ def parse_solucao_x(caminho_solucao: str | Path) -> dict[XKey, int]:
     return solucao
 
 
-def alocacoes_por_disciplina_horario(solucao_x: dict[XKey, int]) -> dict[tuple[str, str], str]:
-    """Converte valores x em atribuicoes (disciplina, horario) -> sala."""
-    alocacoes = {}
-    for (disciplina, sala, horario), valor in solucao_x.items():
-        if valor == 1:
-            alocacoes[(disciplina, horario)] = sala
-    return alocacoes
+def parse_objetivo_sol(caminho_solucao: str | Path) -> float | None:
+    """Le o valor objetivo registrado no cabecalho de um arquivo .sol."""
+    with Path(caminho_solucao).open(encoding="utf-8") as arquivo:
+        for linha in arquivo:
+            resultado = OBJETIVO_SOL_RE.match(linha.strip())
+            if resultado:
+                return float(resultado.group("objetivo"))
+    return None
 
 
 def disciplinas_da_fase(disciplinas, curso: str, fase: int | str) -> set[str]:
@@ -80,28 +79,6 @@ def disciplinas_do_curso(disciplinas, curso: str) -> set[str]:
     }
 
 
-def disciplinas_por_demanda(
-    disciplinas,
-    demanda_alvo: int,
-    tolerancia: int = 5,
-) -> set[str]:
-    return {
-        disciplina
-        for disciplina, dados_disciplina in disciplinas.items()
-        if abs(dados_disciplina.max_alunos_agrupamento() - demanda_alvo) <= tolerancia
-    }
-
-
-def vizinhanca_por_fase(disciplinas, curso: str, fase: int | str) -> Vizinhanca:
-    liberadas = disciplinas_da_fase(disciplinas, curso, fase)
-    return Vizinhanca(
-        tipo="fase",
-        recurso=f"{curso}_{int(fase)}",
-        disciplinas_liberadas=frozenset(liberadas),
-        justificativa="Libera disciplinas de uma mesma fase para reduzir dispersao e preferenciais ruins.",
-    )
-
-
 def vizinhanca_por_curso(disciplinas, curso: str) -> Vizinhanca:
     liberadas = disciplinas_do_curso(disciplinas, curso)
     return Vizinhanca(
@@ -110,92 +87,6 @@ def vizinhanca_por_curso(disciplinas, curso: str) -> Vizinhanca:
         disciplinas_liberadas=frozenset(liberadas),
         justificativa="Libera um curso inteiro para movimentos estruturais maiores.",
     )
-
-
-def vizinhanca_por_demanda(
-    disciplinas,
-    demanda_alvo: int,
-    tolerancia: int = 5,
-) -> Vizinhanca:
-    liberadas = disciplinas_por_demanda(disciplinas, demanda_alvo, tolerancia)
-    return Vizinhanca(
-        tipo="demanda",
-        recurso=f"demanda_{demanda_alvo}_tol_{tolerancia}",
-        disciplinas_liberadas=frozenset(liberadas),
-        justificativa="Libera disciplinas que tendem a disputar salas de capacidade semelhante.",
-    )
-
-
-def pontuar_disciplinas_por_penalidade(
-    disciplinas,
-    solucao_x: dict[XKey, int],
-    peso_sala_nao_preferencial: int = 150,
-    peso_nao_alocada: int = 2000,
-    peso_multiplas_salas: int = 250,
-) -> list[dict]:
-    alocacoes = alocacoes_por_disciplina_horario(solucao_x)
-    linhas = []
-
-    for disciplina, dados_disciplina in disciplinas.items():
-        salas_usadas = set()
-        nao_preferenciais = 0
-        nao_alocadas = 0
-
-        for horario in dados_disciplina.horarios_agrupamento():
-            sala = alocacoes.get((disciplina, horario))
-            if sala is None:
-                nao_alocadas += 1
-                continue
-
-            salas_usadas.add(sala)
-            if dados_disciplina.salasPreferenciais and sala not in dados_disciplina.salasPreferenciais:
-                nao_preferenciais += 1
-
-        penalidade = (
-            peso_sala_nao_preferencial * nao_preferenciais
-            + peso_nao_alocada * nao_alocadas
-            + peso_multiplas_salas * max(0, len(salas_usadas) - 1)
-        )
-        linhas.append(
-            {
-                "disciplina": disciplina,
-                "curso": dados_disciplina.curso,
-                "fase": dados_disciplina.fase,
-                "salas_usadas_qtd": len(salas_usadas),
-                "alocacoes_nao_preferenciais": nao_preferenciais,
-                "horarios_nao_alocados": nao_alocadas,
-                "penalidade_proxy": penalidade,
-            }
-        )
-
-    return sorted(linhas, key=lambda linha: linha["penalidade_proxy"], reverse=True)
-
-
-def vizinhanca_por_penalidade_atual(
-    disciplinas,
-    solucao_x: dict[XKey, int],
-    top_n: int = 10,
-) -> Vizinhanca:
-    ranking = pontuar_disciplinas_por_penalidade(disciplinas, solucao_x)
-    liberadas = [
-        linha["disciplina"]
-        for linha in ranking
-        if linha["penalidade_proxy"] > 0
-    ][:top_n]
-    return Vizinhanca(
-        tipo="penalidade_atual",
-        recurso=f"top_{top_n}_disciplinas_problematicas",
-        disciplinas_liberadas=frozenset(liberadas),
-        justificativa="Libera as disciplinas que mais contribuem para a penalidade da solucao atual.",
-    )
-
-
-def chaves_livres_por_disciplinas(
-    chaves_x: Iterable[XKey],
-    disciplinas_liberadas: Iterable[str],
-) -> set[XKey]:
-    liberadas = set(disciplinas_liberadas)
-    return {chave for chave in chaves_x if chave[0] in liberadas}
 
 
 def aplicar_start_e_fixacao_x(
@@ -236,3 +127,43 @@ def aplicar_start_e_fixacao_x(
         resumo["variaveis_x_fixadas"] += 1
 
     return resumo
+
+
+def solucao_melhorou(atual: dict | None, candidata: dict | None) -> bool:
+    """Retorna True se a candidata e viavel e reduz estritamente o objetivo."""
+    if not candidata or not candidata.get("solucoes"):
+        return False
+
+    objetivo_candidato = candidata.get("objetivo")
+    if objetivo_candidato is None:
+        return False
+
+    if not atual or not atual.get("solucoes") or atual.get("objetivo") is None:
+        return True
+
+    return objetivo_candidato < atual["objetivo"]
+
+
+def cursos_da_instancia(instancia) -> list[str]:
+    """Extrai os cursos da instancia em ordem deterministica."""
+    cursos = instancia.cursos
+    if isinstance(cursos, dict):
+        return sorted(cursos.keys())
+    return sorted(cursos)
+
+
+def salvar_historico_csv(historico: list[dict], caminho_csv: str | Path) -> None:
+    """Salva o historico da busca local em CSV."""
+    caminho = Path(caminho_csv)
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+
+    campos: list[str] = []
+    for registro in historico:
+        for campo in registro:
+            if campo not in campos:
+                campos.append(campo)
+
+    with caminho.open("w", newline="", encoding="utf-8") as arquivo:
+        writer = csv.DictWriter(arquivo, fieldnames=campos)
+        writer.writeheader()
+        writer.writerows(historico)

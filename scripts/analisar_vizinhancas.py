@@ -432,7 +432,7 @@ def main():
     parser.add_argument("--preferenciais", default="./dados/salas_preferenciais_2024.1.xlsx")
     parser.add_argument("--solucao", default="./solution.sol")
     parser.add_argument(
-        "--saida", default="./resultados/vizinhancas_metricas_2024_1.xlsx"
+        "--saida", default="./resultados/diagnosticos/vizinhancas_metricas_2024_1.xlsx"
     )
     args = parser.parse_args()
 

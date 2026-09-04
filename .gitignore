@@ -5,3 +5,6 @@ web/__pycache__
 tests/__pycache__
 __pycache__
 matriz_distancia.csv
+resultados/candidatos/*.sol
+resultados/fix_and_optimize/candidatos/*.sol
+!resultados/fix_and_optimize/candidatos/.gitkeep

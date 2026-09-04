@@ -284,8 +284,7 @@ def resolver_modelo(modelo_alocacao, parametros_gurobi=None, arquivo_solucao=Non
     parametros_gurobi = parametros_gurobi or {}
     m = modelo_alocacao.modelo
     
-    m.setParam('VarsName', 1)
-    m.setParam(GRB.Param.TimeLimit, 25200) # Tempo limite de 7 horas
+    m.setParam("TimeLimit", 25200) # Tempo limite de 7 horas
     for parametro, valor in parametros_gurobi.items():
         m.setParam(parametro, valor)
     m.optimize()
