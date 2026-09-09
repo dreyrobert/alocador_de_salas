@@ -13,6 +13,7 @@ from lns_fix_and_optimize import (
     liberar_fixacoes_x,
     parse_objetivo_sol,
     parse_solucao_x,
+    preparar_fixacao_vizinhanca_x,
     salvar_historico_csv,
     salvar_solucao_x,
     solucao_melhorou,
@@ -183,6 +184,44 @@ class TestLnsFixAndOptimize(unittest.TestCase):
         self.assertEqual(x_vars[("D1", "101-A", "Horario_2_1")].LB, 1)
         self.assertEqual(x_vars[("D2", "102-A", "Horario_2_1")].LB, 0)
         self.assertEqual(x_vars[("D2", "102-A", "Horario_2_1")].UB, 1)
+
+    def test_preparar_fixacao_vizinhanca_x_libera_anteriores_e_retorna_novas(self):
+        x_vars = {
+            ("D1", "101-A", "Horario_2_1"): VarFake(),
+            ("D2", "102-A", "Horario_2_1"): VarFake(),
+            ("D3", "103-A", "Horario_2_1"): VarFake(),
+        }
+        solucao = {
+            ("D1", "101-A", "Horario_2_1"): 1,
+            ("D2", "102-A", "Horario_2_1"): 0,
+            ("D3", "103-A", "Horario_2_1"): 1,
+        }
+
+        chaves_fixadas_cc, resumo_cc = preparar_fixacao_vizinhanca_x(
+            x_vars,
+            solucao,
+            {"D1"},
+        )
+        chaves_fixadas_adm, resumo_adm = preparar_fixacao_vizinhanca_x(
+            x_vars,
+            solucao,
+            {"D2"},
+            chaves_fixadas_anteriores=chaves_fixadas_cc,
+        )
+
+        self.assertEqual(resumo_cc["fixacoes_liberadas"], 0)
+        self.assertEqual(resumo_adm["fixacoes_liberadas"], 2)
+        self.assertEqual(chaves_fixadas_adm, {
+            ("D1", "101-A", "Horario_2_1"),
+            ("D3", "103-A", "Horario_2_1"),
+        })
+        self.assertEqual(x_vars[("D1", "101-A", "Horario_2_1")].LB, 1)
+        self.assertEqual(x_vars[("D1", "101-A", "Horario_2_1")].UB, 1)
+        self.assertEqual(x_vars[("D2", "102-A", "Horario_2_1")].LB, 0)
+        self.assertEqual(x_vars[("D2", "102-A", "Horario_2_1")].UB, 1)
+        self.assertEqual(x_vars[("D3", "103-A", "Horario_2_1")].LB, 1)
+        self.assertEqual(resumo_adm["variaveis_x_livres"], 1)
+        self.assertEqual(resumo_adm["variaveis_x_fixadas"], 2)
 
     def test_parse_objetivo_sol_recupera_valor_do_cabecalho(self):
         conteudo = "# Objective value = 186294.5\nx[D1,101-A,Horario_2_1] 1\n"

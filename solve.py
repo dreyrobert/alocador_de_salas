@@ -14,6 +14,7 @@ from lns_fix_and_optimize import (
     disciplinas_do_curso,
     extrair_solucao_x,
     parse_solucao_x,
+    preparar_fixacao_vizinhanca_x,
 )
 import argparse
 from dataclasses import dataclass
@@ -51,6 +52,7 @@ class ModeloAlocacao:
     restricoes_removidas: set
     resumo_lns: dict | None
     disciplinas_livres: set
+    chaves_x_fixadas: set | None = None
 
 
 def carregar_instancia(
@@ -119,6 +121,32 @@ def aplicar_start_incumbente_x(x, solucao_incumbente_x, disciplinas_livres):
         resumo_lns["valores_start_definidos"] += 1
 
     return resumo_lns
+
+
+def preparar_modelo_para_vizinhanca(
+    modelo_alocacao,
+    solucao_incumbente_x,
+    disciplinas_livres,
+    chaves_fixadas_anteriores=None,
+):
+    """Atualiza um modelo existente para resolver uma nova vizinhanca."""
+    disciplinas_livres = set(disciplinas_livres or [])
+    chaves_anteriores = chaves_fixadas_anteriores
+    if chaves_anteriores is None:
+        chaves_anteriores = getattr(modelo_alocacao, "chaves_x_fixadas", None) or set()
+
+    chaves_fixadas, resumo_lns = preparar_fixacao_vizinhanca_x(
+        modelo_alocacao.x,
+        solucao_incumbente_x,
+        disciplinas_livres,
+        chaves_fixadas_anteriores=chaves_anteriores,
+    )
+    modelo_alocacao.resumo_lns = resumo_lns
+    modelo_alocacao.disciplinas_livres = disciplinas_livres
+    modelo_alocacao.chaves_x_fixadas = chaves_fixadas
+    modelo_alocacao.modelo.update()
+
+    return chaves_fixadas, resumo_lns
 
 
 def construir_modelo(
@@ -278,6 +306,7 @@ def construir_modelo(
         restricoes_removidas=restricoes_removidas,
         resumo_lns=resumo_lns,
         disciplinas_livres=disciplinas_livres,
+        chaves_x_fixadas=None,
     )
 
 

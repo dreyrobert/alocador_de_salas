@@ -40,6 +40,7 @@ class ModeloGurobiFake:
         self.parametros = {}
         self.otimizou = False
         self.arquivo_escrito = None
+        self.atualizacoes = 0
 
     def setParam(self, parametro, valor):
         self.parametros[parametro] = valor
@@ -49,6 +50,9 @@ class ModeloGurobiFake:
 
     def write(self, arquivo_solucao):
         self.arquivo_escrito = arquivo_solucao
+
+    def update(self):
+        self.atualizacoes += 1
 
 
 def cria_disciplina(codigo, horarios, curso="CIÊNCIA DA COMPUTAÇÃO", fase="1", alunos=20):
@@ -303,6 +307,59 @@ class TestVerificaSolucao(unittest.TestCase):
 
 
 class TestResolverModelo(unittest.TestCase):
+    def test_preparar_modelo_para_vizinhanca_atualiza_fixacoes_no_modelo_existente(self):
+        import solve
+
+        modelo = ModeloGurobiFake()
+        x_vars = {
+            ("D1", "101-A", "Horario_2_1"): ValorSolucao(1.0),
+            ("D2", "101-A", "Horario_2_1"): ValorSolucao(0.0),
+            ("D3", "101-A", "Horario_2_1"): ValorSolucao(1.0),
+        }
+        for variavel in x_vars.values():
+            variavel.LB = 0
+            variavel.UB = 1
+            variavel.Start = None
+
+        modelo_alocacao = type(
+            "ModeloAlocacaoFake",
+            (),
+            {
+                "modelo": modelo,
+                "x": x_vars,
+                "resumo_lns": None,
+                "disciplinas_livres": set(),
+                "chaves_x_fixadas": {("D2", "101-A", "Horario_2_1")},
+            },
+        )()
+        x_vars[("D2", "101-A", "Horario_2_1")].LB = 0
+        x_vars[("D2", "101-A", "Horario_2_1")].UB = 0
+        solucao = {
+            ("D1", "101-A", "Horario_2_1"): 1,
+            ("D2", "101-A", "Horario_2_1"): 0,
+            ("D3", "101-A", "Horario_2_1"): 1,
+        }
+
+        chaves_fixadas, resumo = solve.preparar_modelo_para_vizinhanca(
+            modelo_alocacao,
+            solucao_incumbente_x=solucao,
+            disciplinas_livres={"D2"},
+        )
+
+        self.assertEqual(chaves_fixadas, {
+            ("D1", "101-A", "Horario_2_1"),
+            ("D3", "101-A", "Horario_2_1"),
+        })
+        self.assertEqual(x_vars[("D2", "101-A", "Horario_2_1")].LB, 0)
+        self.assertEqual(x_vars[("D2", "101-A", "Horario_2_1")].UB, 1)
+        self.assertEqual(x_vars[("D1", "101-A", "Horario_2_1")].LB, 1)
+        self.assertEqual(x_vars[("D3", "101-A", "Horario_2_1")].UB, 1)
+        self.assertEqual(modelo_alocacao.disciplinas_livres, {"D2"})
+        self.assertEqual(modelo_alocacao.chaves_x_fixadas, chaves_fixadas)
+        self.assertEqual(modelo_alocacao.resumo_lns, resumo)
+        self.assertEqual(resumo["fixacoes_liberadas"], 1)
+        self.assertEqual(modelo.atualizacoes, 1)
+
     def test_retorna_solucao_x_em_memoria_quando_ha_solucao(self):
         import solve
 

@@ -193,6 +193,35 @@ def liberar_fixacoes_x(
     return liberadas
 
 
+def preparar_fixacao_vizinhanca_x(
+    x_vars,
+    solucao_x: dict[XKey, int],
+    disciplinas_liberadas: Iterable[str],
+    chaves_fixadas_anteriores: Iterable[XKey] | None = None,
+) -> tuple[set[XKey], dict[str, int]]:
+    """Libera a fixacao anterior, aplica start e fixa a vizinhanca atual."""
+    fixacoes_liberadas = liberar_fixacoes_x(
+        x_vars,
+        chaves_fixadas_anteriores or (),
+    )
+    resumo_start = aplicar_start_x(x_vars, solucao_x)
+    chaves_fixadas, resumo_fixacao = fixar_fora_da_vizinhanca_x(
+        x_vars,
+        solucao_x,
+        disciplinas_liberadas,
+    )
+
+    resumo = {
+        "variaveis_x_total": resumo_start["variaveis_x_total"],
+        "variaveis_x_livres": resumo_fixacao["variaveis_x_livres"],
+        "variaveis_x_fixadas": resumo_fixacao["variaveis_x_fixadas"],
+        "valores_start_definidos": resumo_start["valores_start_definidos"],
+        "chaves_sem_valor_incumbente": resumo_start["chaves_sem_valor_incumbente"],
+        "fixacoes_liberadas": fixacoes_liberadas,
+    }
+    return chaves_fixadas, resumo
+
+
 def aplicar_start_e_fixacao_x(
     x_vars,
     solucao_x: dict[XKey, int],
@@ -203,19 +232,14 @@ def aplicar_start_e_fixacao_x(
     `x_vars` deve ser um dicionario no formato usado pelo `solve.py`:
     `(disciplina, sala, horario) -> variavel Gurobi`.
     """
-    resumo_start = aplicar_start_x(x_vars, solucao_x)
-    _, resumo_fixacao = fixar_fora_da_vizinhanca_x(
-        x_vars,
-        solucao_x,
-        disciplinas_liberadas,
-    )
+    _, resumo = preparar_fixacao_vizinhanca_x(x_vars, solucao_x, disciplinas_liberadas)
 
     return {
-        "variaveis_x_total": resumo_start["variaveis_x_total"],
-        "variaveis_x_livres": resumo_fixacao["variaveis_x_livres"],
-        "variaveis_x_fixadas": resumo_fixacao["variaveis_x_fixadas"],
-        "valores_start_definidos": resumo_start["valores_start_definidos"],
-        "chaves_sem_valor_incumbente": resumo_start["chaves_sem_valor_incumbente"],
+        "variaveis_x_total": resumo["variaveis_x_total"],
+        "variaveis_x_livres": resumo["variaveis_x_livres"],
+        "variaveis_x_fixadas": resumo["variaveis_x_fixadas"],
+        "valores_start_definidos": resumo["valores_start_definidos"],
+        "chaves_sem_valor_incumbente": resumo["chaves_sem_valor_incumbente"],
     }
 
 
