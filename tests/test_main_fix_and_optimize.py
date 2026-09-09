@@ -60,7 +60,7 @@ class TestMainFixAndOptimize(unittest.TestCase):
         )
 
     def test_reotimizar_vizinhanca_usa_objeto_vizinhanca_generico(self):
-        chamadas = {"construir": [], "resolver": []}
+        chamadas = {"preparar": [], "resolver": []}
         vizinhanca = Vizinhanca(
             tipo="curso",
             recurso="CC",
@@ -68,21 +68,20 @@ class TestMainFixAndOptimize(unittest.TestCase):
         )
         solucao_incumbente = {("D1", "101-A", "Horario_2_1"): 1}
 
-        def construir_fake(instancia, **kwargs):
-            chamadas["construir"].append((instancia, kwargs))
-            return "modelo"
+        def preparar_fake(modelo_alocacao, **kwargs):
+            chamadas["preparar"].append((modelo_alocacao, kwargs))
 
         def resolver_fake(modelo_alocacao, parametros_gurobi=None, arquivo_solucao=None):
             chamadas["resolver"].append((modelo_alocacao, parametros_gurobi, arquivo_solucao))
             return {"status_nome": "OPTIMAL", "objetivo": 120.0}
 
         resultado = reotimizar_vizinhanca(
-            instancia="instancia",
+            modelo_alocacao="modelo",
             solucao_incumbente_x=solucao_incumbente,
             vizinhanca=vizinhanca,
             tempo_subproblema=60,
             arquivo_solucao=None,
-            construir=construir_fake,
+            preparar_modelo=preparar_fake,
             resolver=resolver_fake,
         )
 
@@ -90,9 +89,11 @@ class TestMainFixAndOptimize(unittest.TestCase):
         self.assertEqual(resultado["tipo_vizinhanca"], "curso")
         self.assertEqual(resultado["recurso"], "CC")
         self.assertEqual(resultado["disciplinas_livres_qtd"], 2)
-        self.assertEqual(chamadas["construir"][0][1]["solucao_incumbente_x"], solucao_incumbente)
-        self.assertEqual(chamadas["construir"][0][1]["disciplinas_livres"], {"D1", "D2"})
+        self.assertEqual(chamadas["preparar"][0][0], "modelo")
+        self.assertEqual(chamadas["preparar"][0][1]["solucao_incumbente_x"], solucao_incumbente)
+        self.assertEqual(chamadas["preparar"][0][1]["disciplinas_livres"], {"D1", "D2"})
         self.assertEqual(chamadas["resolver"][0][1], parametros_subproblema(60))
+        self.assertEqual(chamadas["resolver"][0][0], "modelo")
 
     def test_executar_passada_por_cursos_aceita_melhoria_e_atualiza_incumbente(self):
         disciplinas = {
@@ -109,6 +110,9 @@ class TestMainFixAndOptimize(unittest.TestCase):
 
             def construir_fake(inst, **kwargs):
                 return "modelo"
+
+            def preparar_fake(modelo, **kwargs):
+                self.assertEqual(modelo, "modelo")
 
             # CC melhora (180.0), ADM nao melhora (190.0 > 180.0)
             objetivos = {"CC": 180.0, "ADM": 190.0}
@@ -132,11 +136,12 @@ class TestMainFixAndOptimize(unittest.TestCase):
             incumbente, historico = executar_passada_por_cursos(
                 arquivo_solucao_incumbente=incumbente_sol,
                 instancia=instancia,
+                modelo_alocacao="modelo",
                 cursos=["CC", "ADM"],
                 arquivo_melhor_solucao=melhor_sol,
                 pasta_candidatos=Path(temp_dir) / "candidatos",
                 tempo_subproblema=10,
-                construir=construir_fake,
+                preparar_modelo=preparar_fake,
                 resolver=resolver_fake,
                 ler_solucao=lambda arq: {("D1", "101-A", "Horario_2_1"): 1},
             )
@@ -177,11 +182,12 @@ class TestMainFixAndOptimize(unittest.TestCase):
             executar_passada_por_cursos(
                 arquivo_solucao_incumbente=incumbente_sol,
                 instancia=instancia,
+                modelo_alocacao="modelo",
                 cursos=["CC"],
                 arquivo_melhor_solucao=melhor_sol,
                 pasta_candidatos=pasta_candidatos,
                 tempo_subproblema=10,
-                construir=lambda inst, **kwargs: "modelo",
+                preparar_modelo=lambda modelo, **kwargs: None,
                 resolver=resolver_fake,
                 ler_solucao=lambda arq: {("D1", "101-A", "Horario_2_1"): 1},
                 salvar_candidatos=True,
@@ -217,12 +223,13 @@ class TestMainFixAndOptimize(unittest.TestCase):
             _, historico = executar_passada_por_cursos(
                 arquivo_solucao_incumbente=incumbente_sol,
                 instancia=instancia,
+                modelo_alocacao="modelo",
                 cursos=["CC"],
                 arquivo_melhor_solucao=Path(temp_dir) / "melhor.sol",
                 pasta_candidatos=Path(temp_dir) / "candidatos",
                 tempo_subproblema=300,
                 tempo_fim_total=time.time() + 10,
-                construir=lambda inst, **kwargs: "modelo",
+                preparar_modelo=lambda modelo, **kwargs: None,
                 resolver=resolver_fake,
                 ler_solucao=lambda arq: {("D1", "101-A", "Horario_2_1"): 1},
             )
@@ -243,12 +250,18 @@ class TestMainFixAndOptimize(unittest.TestCase):
             log_csv = Path(temp_dir) / "log.csv"
             log_json = Path(temp_dir) / "log.json"
             chamadas_resolver = []
+            chamadas_construir = []
+            chamadas_preparar = []
 
             def carregar_fake(*args):
                 return instancia
 
             def construir_fake(inst, **kwargs):
+                chamadas_construir.append((inst, kwargs))
                 return "modelo"
+
+            def preparar_fake(modelo, **kwargs):
+                chamadas_preparar.append((modelo, kwargs))
 
             def resolver_fake(modelo, parametros_gurobi=None, arquivo_solucao=None):
                 chamadas_resolver.append(arquivo_solucao)
@@ -274,6 +287,7 @@ class TestMainFixAndOptimize(unittest.TestCase):
                 tempo_subproblema=5,
                 carregar=carregar_fake,
                 construir=construir_fake,
+                preparar_modelo=preparar_fake,
                 resolver=resolver_fake,
                 ler_solucao=lambda arq: {("D1", "101-A", "Horario_2_1"): 1},
             )
@@ -290,6 +304,8 @@ class TestMainFixAndOptimize(unittest.TestCase):
             self.assertTrue(log_csv.exists())
             self.assertTrue(log_json.exists())
             self.assertEqual(chamadas_resolver, [None, None, None])
+            self.assertEqual(len(chamadas_construir), 1)
+            self.assertEqual([chamada[0] for chamada in chamadas_preparar], ["modelo", "modelo"])
 
 
 if __name__ == "__main__":

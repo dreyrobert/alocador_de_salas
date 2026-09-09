@@ -11,6 +11,7 @@ from solve import (
     InstanciaAlocacao,
     carregar_instancia,
     construir_modelo,
+    preparar_modelo_para_vizinhanca,
     resolver_modelo,
 )
 from lns_fix_and_optimize import (
@@ -55,21 +56,21 @@ def parametros_subproblema(tempo_subproblema: float = 300) -> dict[str, float | 
 
 
 def reotimizar_vizinhanca(
-    instancia: InstanciaAlocacao,
+    modelo_alocacao,
     solucao_incumbente_x: dict,
     vizinhanca: Vizinhanca,
     tempo_subproblema: float,
     arquivo_solucao: str | None = None,
-    construir: Callable = construir_modelo,
+    preparar_modelo: Callable = preparar_modelo_para_vizinhanca,
     resolver: Callable = resolver_modelo,
 ) -> dict:
-    """Reotimiza uma vizinhanca mantendo fixa a solucao fora dela."""
+    """Reotimiza uma vizinhanca em um modelo ja construido."""
     disciplinas_liberadas = set(vizinhanca.disciplinas_liberadas)
     if not disciplinas_liberadas:
         raise ValueError("A vizinhanca deve conter ao menos uma disciplina liberada.")
 
-    modelo_alocacao = construir(
-        instancia,
+    preparar_modelo(
+        modelo_alocacao,
         solucao_incumbente_x=solucao_incumbente_x,
         disciplinas_livres=disciplinas_liberadas,
     )
@@ -88,13 +89,14 @@ def reotimizar_vizinhanca(
 def executar_passada_por_cursos(
     arquivo_solucao_incumbente: str | Path | dict,
     instancia: InstanciaAlocacao,
+    modelo_alocacao,
     cursos: list[str] | None = None,
     arquivo_melhor_solucao: str | Path = ARQUIVO_MELHOR_SOLUCAO_PADRAO,
     pasta_candidatos: str | Path = PASTA_CANDIDATOS_PADRAO,
     tempo_subproblema: float = 60,
     numero_passada: int = 1,
     objetivo_incumbente_inicial: float | None = None,
-    construir: Callable = construir_modelo,
+    preparar_modelo: Callable = preparar_modelo_para_vizinhanca,
     resolver: Callable = resolver_modelo,
     ler_solucao: Callable = parse_solucao_x,
     tempo_fim_total: float | None = None,
@@ -148,12 +150,12 @@ def executar_passada_por_cursos(
             continue
 
         resultado_candidato = reotimizar_vizinhanca(
-            instancia=instancia,
+            modelo_alocacao=modelo_alocacao,
             solucao_incumbente_x=solucao_x_atual,
             vizinhanca=vizinhanca,
             tempo_subproblema=tempo_subproblema_efetivo,
             arquivo_solucao=arquivo_candidato_str,
-            construir=construir,
+            preparar_modelo=preparar_modelo,
             resolver=resolver,
         )
         resultado_candidato["curso_livre"] = curso
@@ -210,6 +212,7 @@ def executar_fix_and_optimize_cursos(
     salvar_candidatos: bool = False,
     carregar: Callable = carregar_instancia,
     construir: Callable = construir_modelo,
+    preparar_modelo: Callable = preparar_modelo_para_vizinhanca,
     resolver: Callable = resolver_modelo,
     ler_solucao: Callable = parse_solucao_x,
 ) -> dict:
@@ -227,9 +230,9 @@ def executar_fix_and_optimize_cursos(
         arquivo_salas_preferenciais,
     )
 
-    modelo_inicial = construir(instancia)
+    modelo_alocacao = construir(instancia)
     resultado_inicial = resolver(
-        modelo_inicial,
+        modelo_alocacao,
         parametros_gurobi=parametros_primeira_solucao(
             tempo_modelo=tempo_modelo_inicial,
             tempo_heuristica=tempo_heuristica_inicial,
@@ -268,12 +271,13 @@ def executar_fix_and_optimize_cursos(
         incumbente_passada, hist_passada = executar_passada_por_cursos(
             arquivo_solucao_incumbente=incumbente_atual.get("solucao_x"),
             instancia=instancia,
+            modelo_alocacao=modelo_alocacao,
             cursos=cursos_rodada,
             arquivo_melhor_solucao=caminho_melhor,
             tempo_subproblema=tempo_subproblema,
             numero_passada=passada,
             objetivo_incumbente_inicial=incumbente_atual.get("objetivo"),
-            construir=construir,
+            preparar_modelo=preparar_modelo,
             resolver=resolver,
             ler_solucao=ler_solucao,
             tempo_fim_total=tempo_fim_total,
