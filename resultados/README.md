@@ -25,6 +25,10 @@ Por padrao, a rotina mantem esses candidatos apenas em memoria e salva somente
 a melhor solucao final. Use `--salvar-candidatos` para gerar estes arquivos de
 debug.
 
+A rotina completa constroi o modelo Gurobi uma unica vez. A cada vizinhanca, ela
+libera as fixacoes anteriores das variaveis `x`, aplica a incumbente atual como
+MIP start e fixa somente as variaveis fora da vizinhanca corrente.
+
 ## `experimentos/`
 
 Resultados de rodadas comparativas ou execucoes nomeadas. Quando o experimento

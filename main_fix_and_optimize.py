@@ -11,6 +11,7 @@ from solve import (
     InstanciaAlocacao,
     carregar_instancia,
     construir_modelo,
+    liberar_fixacoes_modelo,
     preparar_modelo_para_vizinhanca,
     resolver_modelo,
 )
@@ -213,6 +214,7 @@ def executar_fix_and_optimize_cursos(
     carregar: Callable = carregar_instancia,
     construir: Callable = construir_modelo,
     preparar_modelo: Callable = preparar_modelo_para_vizinhanca,
+    liberar_modelo: Callable = liberar_fixacoes_modelo,
     resolver: Callable = resolver_modelo,
     ler_solucao: Callable = parse_solucao_x,
 ) -> dict:
@@ -297,6 +299,8 @@ def executar_fix_and_optimize_cursos(
             # Otimo local alcancado com respeito a vizinhancas unicas por curso
             break
         passada += 1
+
+    liberar_modelo(modelo_alocacao)
 
     if arquivo_log_csv:
         salvar_historico_csv(historico_total, arquivo_log_csv)

@@ -111,8 +111,11 @@ class TestMainFixAndOptimize(unittest.TestCase):
             def construir_fake(inst, **kwargs):
                 return "modelo"
 
+            preparacoes = []
+
             def preparar_fake(modelo, **kwargs):
                 self.assertEqual(modelo, "modelo")
+                preparacoes.append(kwargs)
 
             # CC melhora (180.0), ADM nao melhora (190.0 > 180.0)
             objetivos = {"CC": 180.0, "ADM": 190.0}
@@ -143,7 +146,7 @@ class TestMainFixAndOptimize(unittest.TestCase):
                 tempo_subproblema=10,
                 preparar_modelo=preparar_fake,
                 resolver=resolver_fake,
-                ler_solucao=lambda arq: {("D1", "101-A", "Horario_2_1"): 1},
+                ler_solucao=lambda arq: {("D1", "101-A", "Horario_2_1"): 0},
             )
 
             self.assertEqual(incumbente["objetivo"], 180.0)
@@ -154,6 +157,14 @@ class TestMainFixAndOptimize(unittest.TestCase):
             self.assertEqual(historico[1]["curso"], "ADM")
             self.assertFalse((Path(temp_dir) / "candidatos").exists())
             self.assertEqual(chamadas, [("CC", None), ("ADM", None)])
+            self.assertEqual(
+                preparacoes[0]["solucao_incumbente_x"],
+                {("D1", "101-A", "Horario_2_1"): 0},
+            )
+            self.assertEqual(
+                preparacoes[1]["solucao_incumbente_x"],
+                {("D1", "101-A", "Horario_2_1"): 1},
+            )
 
     def test_executar_passada_por_cursos_pode_salvar_candidatos_para_debug(self):
         disciplinas = {
@@ -252,6 +263,7 @@ class TestMainFixAndOptimize(unittest.TestCase):
             chamadas_resolver = []
             chamadas_construir = []
             chamadas_preparar = []
+            chamadas_liberar = []
 
             def carregar_fake(*args):
                 return instancia
@@ -262,6 +274,10 @@ class TestMainFixAndOptimize(unittest.TestCase):
 
             def preparar_fake(modelo, **kwargs):
                 chamadas_preparar.append((modelo, kwargs))
+
+            def liberar_fake(modelo):
+                chamadas_liberar.append(modelo)
+                return 0
 
             def resolver_fake(modelo, parametros_gurobi=None, arquivo_solucao=None):
                 chamadas_resolver.append(arquivo_solucao)
@@ -288,6 +304,7 @@ class TestMainFixAndOptimize(unittest.TestCase):
                 carregar=carregar_fake,
                 construir=construir_fake,
                 preparar_modelo=preparar_fake,
+                liberar_modelo=liberar_fake,
                 resolver=resolver_fake,
                 ler_solucao=lambda arq: {("D1", "101-A", "Horario_2_1"): 1},
             )
@@ -306,6 +323,7 @@ class TestMainFixAndOptimize(unittest.TestCase):
             self.assertEqual(chamadas_resolver, [None, None, None])
             self.assertEqual(len(chamadas_construir), 1)
             self.assertEqual([chamada[0] for chamada in chamadas_preparar], ["modelo", "modelo"])
+            self.assertEqual(chamadas_liberar, ["modelo"])
 
 
 if __name__ == "__main__":

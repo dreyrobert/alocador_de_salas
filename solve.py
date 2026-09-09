@@ -13,6 +13,7 @@ from lns_fix_and_optimize import (
     disciplinas_da_fase,
     disciplinas_do_curso,
     extrair_solucao_x,
+    liberar_fixacoes_x,
     parse_solucao_x,
     preparar_fixacao_vizinhanca_x,
 )
@@ -149,6 +150,16 @@ def preparar_modelo_para_vizinhanca(
     return chaves_fixadas, resumo_lns
 
 
+def liberar_fixacoes_modelo(modelo_alocacao):
+    """Libera as fixacoes x ativas em um modelo reutilizado."""
+    chaves_fixadas = getattr(modelo_alocacao, "chaves_x_fixadas", None) or set()
+    liberadas = liberar_fixacoes_x(modelo_alocacao.x, chaves_fixadas)
+    modelo_alocacao.chaves_x_fixadas = set()
+    modelo_alocacao.disciplinas_livres = set()
+    modelo_alocacao.modelo.update()
+    return liberadas
+
+
 def construir_modelo(
     instancia,
     restricoes_removidas=None,
@@ -195,6 +206,13 @@ def construir_modelo(
         solucao_incumbente_x,
         disciplinas_livres,
     )
+    chaves_x_fixadas = None
+    if solucao_incumbente_x is not None and disciplinas_livres:
+        chaves_x_fixadas = {
+            chave
+            for chave in x
+            if chave[0] not in disciplinas_livres
+        }
 
     y = m.addVars(disciplinas,salas,vtype=gp.GRB.INTEGER, name="y")
     w = m.addVars(salasLista,cursos,vtype=gp.GRB.BINARY,name="w")
@@ -306,7 +324,7 @@ def construir_modelo(
         restricoes_removidas=restricoes_removidas,
         resumo_lns=resumo_lns,
         disciplinas_livres=disciplinas_livres,
-        chaves_x_fixadas=None,
+        chaves_x_fixadas=chaves_x_fixadas,
     )
 
 

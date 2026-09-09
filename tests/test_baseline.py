@@ -360,6 +360,39 @@ class TestResolverModelo(unittest.TestCase):
         self.assertEqual(resumo["fixacoes_liberadas"], 1)
         self.assertEqual(modelo.atualizacoes, 1)
 
+    def test_liberar_fixacoes_modelo_limpa_estado_de_modelo_reutilizado(self):
+        import solve
+
+        modelo = ModeloGurobiFake()
+        x_vars = {
+            ("D1", "101-A", "Horario_2_1"): ValorSolucao(1.0),
+            ("D2", "101-A", "Horario_2_1"): ValorSolucao(0.0),
+        }
+        for variavel in x_vars.values():
+            variavel.LB = 0
+            variavel.UB = 0
+
+        modelo_alocacao = type(
+            "ModeloAlocacaoFake",
+            (),
+            {
+                "modelo": modelo,
+                "x": x_vars,
+                "disciplinas_livres": {"D1"},
+                "chaves_x_fixadas": set(x_vars),
+            },
+        )()
+
+        liberadas = solve.liberar_fixacoes_modelo(modelo_alocacao)
+
+        self.assertEqual(liberadas, 2)
+        self.assertEqual(modelo_alocacao.chaves_x_fixadas, set())
+        self.assertEqual(modelo_alocacao.disciplinas_livres, set())
+        self.assertEqual(x_vars[("D1", "101-A", "Horario_2_1")].LB, 0)
+        self.assertEqual(x_vars[("D1", "101-A", "Horario_2_1")].UB, 1)
+        self.assertEqual(x_vars[("D2", "101-A", "Horario_2_1")].UB, 1)
+        self.assertEqual(modelo.atualizacoes, 1)
+
     def test_retorna_solucao_x_em_memoria_quando_ha_solucao(self):
         import solve
 
