@@ -62,6 +62,25 @@ def extrair_solucao_x(x_vars) -> dict[XKey, int]:
     return solucao
 
 
+def salvar_solucao_x(
+    solucao_x: dict[XKey, int],
+    caminho_solucao: str | Path,
+    objetivo: float | None = None,
+) -> None:
+    """Salva uma solucao x[d,s,h] em formato .sol simples e parseavel."""
+    caminho = Path(caminho_solucao)
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+
+    linhas = []
+    if objetivo is not None:
+        linhas.append(f"# Objective value = {objetivo}")
+
+    for disciplina, sala, horario in sorted(solucao_x):
+        linhas.append(f"x[{disciplina},{sala},{horario}] {solucao_x[(disciplina, sala, horario)]}")
+
+    caminho.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+
+
 def parse_objetivo_sol(caminho_solucao: str | Path) -> float | None:
     """Le o valor objetivo registrado no cabecalho de um arquivo .sol."""
     with Path(caminho_solucao).open(encoding="utf-8") as arquivo:

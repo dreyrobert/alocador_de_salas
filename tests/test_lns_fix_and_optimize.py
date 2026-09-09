@@ -11,6 +11,7 @@ from lns_fix_and_optimize import (
     parse_objetivo_sol,
     parse_solucao_x,
     salvar_historico_csv,
+    salvar_solucao_x,
     solucao_melhorou,
     vizinhanca_por_curso,
 )
@@ -68,6 +69,19 @@ class TestLnsFixAndOptimize(unittest.TestCase):
                 ("D2", "101-A", "Horario_2_2"): 1,
             },
         )
+
+    def test_salvar_solucao_x_grava_formato_parseavel(self):
+        solucao_x = {
+            ("D1", "101-A", "Horario_2_1"): 1,
+            ("D1", "102-A", "Horario_2_1"): 0,
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            caminho = Path(temp_dir) / "melhor.sol"
+            salvar_solucao_x(solucao_x, caminho, objetivo=123.5)
+
+            self.assertEqual(parse_objetivo_sol(caminho), 123.5)
+            self.assertEqual(parse_solucao_x(caminho), solucao_x)
 
     def test_seletores_de_disciplina_por_fase_e_curso(self):
         disciplinas = {

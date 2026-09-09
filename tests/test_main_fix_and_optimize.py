@@ -399,7 +399,7 @@ class TestMainFixAndOptimize(unittest.TestCase):
 
             def resolver_fake(modelo, parametros_gurobi=None, arquivo_solucao=None):
                 chamadas_resolver.append(arquivo_solucao)
-                objetivo = 300.0 if arquivo_solucao == str(solucao_inicial) else 250.0
+                objetivo = 300.0 if len(chamadas_resolver) == 1 else 250.0
                 if arquivo_solucao:
                     Path(arquivo_solucao).write_text(
                         f"# Objective value = {objetivo}\n",
@@ -410,6 +410,7 @@ class TestMainFixAndOptimize(unittest.TestCase):
                     "solucoes": 1,
                     "objetivo": objetivo,
                     "arquivo_solucao": arquivo_solucao,
+                    "solucao_x": {("D1", "101-A", "Horario_2_1"): 1},
                     "lns": {"variaveis_x_livres": 10, "variaveis_x_fixadas": 90},
                 }
 
@@ -435,9 +436,12 @@ class TestMainFixAndOptimize(unittest.TestCase):
             self.assertEqual(resultado["ganho_absoluto"], 50.0)
             self.assertEqual(resultado["passadas_executadas"], 2)
             self.assertEqual(resultado["melhorias_aceitas"], 1)
+            self.assertFalse(solucao_inicial.exists())
+            self.assertTrue(melhor_sol.exists())
+            self.assertIn("# Objective value = 250.0", melhor_sol.read_text(encoding="utf-8"))
             self.assertTrue(log_csv.exists())
             self.assertTrue(log_json.exists())
-            self.assertEqual(chamadas_resolver[0], str(solucao_inicial))
+            self.assertEqual(chamadas_resolver, [None, None, None])
 
 
 if __name__ == "__main__":
