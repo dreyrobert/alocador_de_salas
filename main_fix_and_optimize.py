@@ -28,8 +28,6 @@ ARQUIVO_HORARIOS_PADRAO = "./dados/horarios_2024_1.xlsx"
 ARQUIVO_SALAS_PADRAO = "./dados/salas_2024_1.csv"
 ARQUIVO_PREFERENCIAIS_PADRAO = "./dados/salas_preferenciais_2024.1.xlsx"
 PASTA_FIX_AND_OPTIMIZE_PADRAO = "./resultados/fix_and_optimize"
-ARQUIVO_SOLUCAO_INICIAL_PADRAO = f"{PASTA_FIX_AND_OPTIMIZE_PADRAO}/primeira_solucao_fix_and_optimize.sol"
-ARQUIVO_SOLUCAO_CURSO_PADRAO = f"{PASTA_FIX_AND_OPTIMIZE_PADRAO}/solucao_fix_and_optimize_curso.sol"
 ARQUIVO_MELHOR_SOLUCAO_PADRAO = f"{PASTA_FIX_AND_OPTIMIZE_PADRAO}/melhor_solucao_fix_and_optimize.sol"
 ARQUIVO_HISTORICO_CSV_PADRAO = f"{PASTA_FIX_AND_OPTIMIZE_PADRAO}/historico_fix_and_optimize.csv"
 ARQUIVO_HISTORICO_JSON_PADRAO = f"{PASTA_FIX_AND_OPTIMIZE_PADRAO}/historico_fix_and_optimize.json"
@@ -56,81 +54,19 @@ def parametros_subproblema(tempo_subproblema: float = 300) -> dict[str, float | 
     }
 
 
-def gerar_primeira_solucao(
-    arquivo_horarios: str = ARQUIVO_HORARIOS_PADRAO,
-    arquivo_salas: str = ARQUIVO_SALAS_PADRAO,
-    arquivo_salas_preferenciais: str = ARQUIVO_PREFERENCIAIS_PADRAO,
-    arquivo_solucao: str = ARQUIVO_SOLUCAO_INICIAL_PADRAO,
-    tempo_modelo: float = 300,
-    tempo_heuristica: float = 300,
-    carregar: Callable = carregar_instancia,
-    construir: Callable = construir_modelo,
-    resolver: Callable = resolver_modelo,
-) -> dict:
-    """Gera a solucao inicial para a rotina fix-and-optimize."""
-    arquivo_solucao_str = None
-    if arquivo_solucao:
-        caminho_solucao = Path(arquivo_solucao)
-        caminho_solucao.parent.mkdir(parents=True, exist_ok=True)
-        arquivo_solucao_str = str(caminho_solucao)
-
-    instancia = carregar(
-        arquivo_horarios,
-        arquivo_salas,
-        arquivo_salas_preferenciais,
-    )
-    modelo_alocacao = construir(instancia)
-    resultado = resolver(
-        modelo_alocacao,
-        parametros_gurobi=parametros_primeira_solucao(
-            tempo_modelo=tempo_modelo,
-            tempo_heuristica=tempo_heuristica,
-        ),
-        arquivo_solucao=arquivo_solucao_str,
-    )
-    resultado["etapa"] = "primeira_solucao"
-    return resultado
-
-
-def reotimizar_subproblema(
-    arquivo_solucao_incumbente: str | Path | dict,
+def reotimizar_vizinhanca(
+    instancia: InstanciaAlocacao,
+    solucao_incumbente_x: dict,
     vizinhanca: Vizinhanca,
-    arquivo_horarios: str = ARQUIVO_HORARIOS_PADRAO,
-    arquivo_salas: str = ARQUIVO_SALAS_PADRAO,
-    arquivo_salas_preferenciais: str = ARQUIVO_PREFERENCIAIS_PADRAO,
-    arquivo_solucao: str = ARQUIVO_SOLUCAO_CURSO_PADRAO,
-    tempo_subproblema: float = 300,
-    instancia: InstanciaAlocacao | None = None,
-    carregar: Callable = carregar_instancia,
+    tempo_subproblema: float,
+    arquivo_solucao: str | None = None,
     construir: Callable = construir_modelo,
     resolver: Callable = resolver_modelo,
-    ler_solucao: Callable = parse_solucao_x,
 ) -> dict:
-    """Reotimiza um subproblema mantendo fixo o que esta fora da vizinhanca."""
+    """Reotimiza uma vizinhanca mantendo fixa a solucao fora dela."""
     disciplinas_liberadas = set(vizinhanca.disciplinas_liberadas)
-
     if not disciplinas_liberadas:
         raise ValueError("A vizinhanca deve conter ao menos uma disciplina liberada.")
-
-    arquivo_solucao_str = None
-    if arquivo_solucao:
-        caminho_solucao = Path(arquivo_solucao)
-        caminho_solucao.parent.mkdir(parents=True, exist_ok=True)
-        arquivo_solucao_str = str(caminho_solucao)
-
-    if instancia is None:
-        instancia = carregar(
-            arquivo_horarios,
-            arquivo_salas,
-            arquivo_salas_preferenciais,
-        )
-
-    if isinstance(arquivo_solucao_incumbente, dict):
-        solucao_incumbente_x = arquivo_solucao_incumbente
-    else:
-        if not arquivo_solucao_incumbente:
-            raise ValueError("Informe o caminho do arquivo de solucao incumbente.")
-        solucao_incumbente_x = ler_solucao(arquivo_solucao_incumbente)
 
     modelo_alocacao = construir(
         instancia,
@@ -140,54 +76,12 @@ def reotimizar_subproblema(
     resultado = resolver(
         modelo_alocacao,
         parametros_gurobi=parametros_subproblema(tempo_subproblema),
-        arquivo_solucao=arquivo_solucao_str,
+        arquivo_solucao=arquivo_solucao,
     )
-    resultado["etapa"] = "reotimizacao_subproblema"
+    resultado["etapa"] = "reotimizacao_vizinhanca"
     resultado["tipo_vizinhanca"] = vizinhanca.tipo
     resultado["recurso"] = vizinhanca.recurso
     resultado["disciplinas_livres_qtd"] = len(disciplinas_liberadas)
-    return resultado
-
-
-def reotimizar_vizinhanca_curso(
-    arquivo_solucao_incumbente: str | Path | dict,
-    curso_livre: str,
-    arquivo_horarios: str = ARQUIVO_HORARIOS_PADRAO,
-    arquivo_salas: str = ARQUIVO_SALAS_PADRAO,
-    arquivo_salas_preferenciais: str = ARQUIVO_PREFERENCIAIS_PADRAO,
-    arquivo_solucao: str = ARQUIVO_SOLUCAO_CURSO_PADRAO,
-    tempo_subproblema: float = 300,
-    instancia: InstanciaAlocacao | None = None,
-    carregar: Callable = carregar_instancia,
-    construir: Callable = construir_modelo,
-    resolver: Callable = resolver_modelo,
-    ler_solucao: Callable = parse_solucao_x,
-) -> dict:
-    """Reotimiza a vizinhanca liberando apenas as disciplinas de um curso."""
-    if not curso_livre:
-        raise ValueError("Informe o curso que ficara livre na vizinhanca.")
-
-    if instancia is None:
-        instancia = carregar(
-            arquivo_horarios,
-            arquivo_salas,
-            arquivo_salas_preferenciais,
-        )
-
-    vizinhanca = vizinhanca_por_curso(instancia.disciplinas, curso_livre)
-    resultado = reotimizar_subproblema(
-        arquivo_solucao_incumbente=arquivo_solucao_incumbente,
-        vizinhanca=vizinhanca,
-        arquivo_solucao=arquivo_solucao,
-        tempo_subproblema=tempo_subproblema,
-        instancia=instancia,
-        carregar=carregar,
-        construir=construir,
-        resolver=resolver,
-        ler_solucao=ler_solucao,
-    )
-    resultado["etapa"] = "reotimizacao_curso"
-    resultado["curso_livre"] = curso_livre
     return resultado
 
 
@@ -249,16 +143,20 @@ def executar_passada_por_cursos(
         t0 = time.time()
 
         obj_anterior = incumbente_atual.get("objetivo")
-        resultado_candidato = reotimizar_vizinhanca_curso(
-            arquivo_solucao_incumbente=solucao_x_atual,
-            curso_livre=curso,
-            arquivo_solucao=arquivo_candidato_str,
-            tempo_subproblema=tempo_subproblema_efetivo,
+        vizinhanca = vizinhanca_por_curso(instancia.disciplinas, curso)
+        if not vizinhanca.disciplinas_liberadas:
+            continue
+
+        resultado_candidato = reotimizar_vizinhanca(
             instancia=instancia,
+            solucao_incumbente_x=solucao_x_atual,
+            vizinhanca=vizinhanca,
+            tempo_subproblema=tempo_subproblema_efetivo,
+            arquivo_solucao=arquivo_candidato_str,
             construir=construir,
             resolver=resolver,
-            ler_solucao=ler_solucao,
         )
+        resultado_candidato["curso_livre"] = curso
         tempo_gasto = time.time() - t0
 
         melhorou = solucao_melhorou(incumbente_atual, resultado_candidato)
@@ -329,17 +227,16 @@ def executar_fix_and_optimize_cursos(
         arquivo_salas_preferenciais,
     )
 
-    resultado_inicial = gerar_primeira_solucao(
-        arquivo_horarios=arquivo_horarios,
-        arquivo_salas=arquivo_salas,
-        arquivo_salas_preferenciais=arquivo_salas_preferenciais,
+    modelo_inicial = construir(instancia)
+    resultado_inicial = resolver(
+        modelo_inicial,
+        parametros_gurobi=parametros_primeira_solucao(
+            tempo_modelo=tempo_modelo_inicial,
+            tempo_heuristica=tempo_heuristica_inicial,
+        ),
         arquivo_solucao=None,
-        tempo_modelo=tempo_modelo_inicial,
-        tempo_heuristica=tempo_heuristica_inicial,
-        carregar=lambda *args: instancia,
-        construir=construir,
-        resolver=resolver,
     )
+    resultado_inicial["etapa"] = "primeira_solucao"
     obj_inicial = resultado_inicial.get("objetivo")
     solucao_x_atual = resultado_inicial.get("solucao_x")
     solucao_base = resultado_inicial.get("arquivo_solucao")
@@ -432,23 +329,17 @@ def executar_fix_and_optimize_cursos(
 
 def main() -> dict:
     parser = argparse.ArgumentParser(
-        description="Gera a primeira solucao ou reotimiza vizinhancas por curso para a heuristica fix-and-optimize."
-    )
-    parser.add_argument(
-        "--etapa",
-        choices=["primeira-solucao", "curso", "passada-cursos", "loop-cursos"],
-        default="primeira-solucao",
+        description="Executa a heuristica fix-and-optimize por cursos."
     )
     parser.add_argument("--horarios", default=ARQUIVO_HORARIOS_PADRAO)
     parser.add_argument("--salas", default=ARQUIVO_SALAS_PADRAO)
     parser.add_argument("--preferenciais", default=ARQUIVO_PREFERENCIAIS_PADRAO)
     parser.add_argument("--salvar-solucao", default="")
-    parser.add_argument("--solucao-incumbente", default="")
-    parser.add_argument("--curso-livre", default="")
     parser.add_argument("--tempo-modelo", type=float, default=300)
     parser.add_argument("--tempo-heuristica", type=float, default=300)
     parser.add_argument("--tempo-subproblema", type=float, default=300)
     parser.add_argument("--tempo-total", type=float, default=None)
+    parser.add_argument("--apenas-uma-passada", action="store_true")
     parser.add_argument("--log-csv", default=ARQUIVO_HISTORICO_CSV_PADRAO)
     parser.add_argument("--log-json", default=ARQUIVO_HISTORICO_JSON_PADRAO)
     parser.add_argument(
@@ -458,40 +349,20 @@ def main() -> dict:
     )
     args = parser.parse_args()
 
-    if args.etapa == "curso":
-        resultado = reotimizar_vizinhanca_curso(
-            arquivo_solucao_incumbente=args.solucao_incumbente,
-            curso_livre=args.curso_livre,
-            arquivo_horarios=args.horarios,
-            arquivo_salas=args.salas,
-            arquivo_salas_preferenciais=args.preferenciais,
-            arquivo_solucao=args.salvar_solucao or ARQUIVO_SOLUCAO_CURSO_PADRAO,
-            tempo_subproblema=args.tempo_subproblema,
-        )
-    elif args.etapa in ("passada-cursos", "loop-cursos"):
-        resultado = executar_fix_and_optimize_cursos(
-            arquivo_horarios=args.horarios,
-            arquivo_salas=args.salas,
-            arquivo_salas_preferenciais=args.preferenciais,
-            arquivo_melhor_solucao=args.salvar_solucao or ARQUIVO_MELHOR_SOLUCAO_PADRAO,
-            arquivo_log_csv=args.log_csv,
-            arquivo_log_json=args.log_json,
-            tempo_modelo_inicial=args.tempo_modelo,
-            tempo_heuristica_inicial=args.tempo_heuristica,
-            tempo_subproblema=args.tempo_subproblema,
-            tempo_total_maximo=args.tempo_total,
-            apenas_uma_passada=args.etapa == "passada-cursos",
-            salvar_candidatos=args.salvar_candidatos,
-        )
-    else:
-        resultado = gerar_primeira_solucao(
-            arquivo_horarios=args.horarios,
-            arquivo_salas=args.salas,
-            arquivo_salas_preferenciais=args.preferenciais,
-            arquivo_solucao=args.salvar_solucao or ARQUIVO_SOLUCAO_INICIAL_PADRAO,
-            tempo_modelo=args.tempo_modelo,
-            tempo_heuristica=args.tempo_heuristica,
-        )
+    resultado = executar_fix_and_optimize_cursos(
+        arquivo_horarios=args.horarios,
+        arquivo_salas=args.salas,
+        arquivo_salas_preferenciais=args.preferenciais,
+        arquivo_melhor_solucao=args.salvar_solucao or ARQUIVO_MELHOR_SOLUCAO_PADRAO,
+        arquivo_log_csv=args.log_csv,
+        arquivo_log_json=args.log_json,
+        tempo_modelo_inicial=args.tempo_modelo,
+        tempo_heuristica_inicial=args.tempo_heuristica,
+        tempo_subproblema=args.tempo_subproblema,
+        tempo_total_maximo=args.tempo_total,
+        apenas_uma_passada=args.apenas_uma_passada,
+        salvar_candidatos=args.salvar_candidatos,
+    )
     print("RESULTADO_JSON=" + json.dumps(resultado, ensure_ascii=False, sort_keys=True))
     return resultado
 

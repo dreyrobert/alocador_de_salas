@@ -8,11 +8,7 @@ temporarios e experimentos.
 
 Saidas padrao de `main_fix_and_optimize.py`.
 
-- `primeira_solucao_fix_and_optimize.sol`: solucao inicial gerada antes das
-  passadas por curso em execucoes isoladas da etapa `primeira-solucao`.
 - `melhor_solucao_fix_and_optimize.sol`: melhor solucao encontrada pela rotina.
-- `solucao_fix_and_optimize_curso.sol`: saida de uma reotimizacao isolada pela
-  etapa `curso`.
 - `historico_fix_and_optimize.csv` e `historico_fix_and_optimize.json`:
   historico das tentativas por curso.
 
@@ -25,9 +21,9 @@ temporariamente as disciplinas daquele curso e fixar as demais. Se o objetivo
 melhorar, esse candidato e copiado para a melhor solucao; se nao melhorar, ele
 fica apenas como registro/debug da tentativa.
 
-Por padrao, a rotina completa `loop-cursos` mantem esses candidatos apenas em
-memoria e salva somente a melhor solucao final. Use `--salvar-candidatos` para
-gerar estes arquivos de debug.
+Por padrao, a rotina mantem esses candidatos apenas em memoria e salva somente
+a melhor solucao final. Use `--salvar-candidatos` para gerar estes arquivos de
+debug.
 
 ## `experimentos/`
 
