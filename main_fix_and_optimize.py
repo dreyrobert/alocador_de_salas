@@ -309,6 +309,7 @@ def executar_fix_and_optimize_cursos(
     tempo_subproblema: float = 60,
     tempo_total_maximo: float | None = None,
     apenas_uma_passada: bool = False,
+    salvar_candidatos: bool = False,
     carregar: Callable = carregar_instancia,
     construir: Callable = construir_modelo,
     resolver: Callable = resolver_modelo,
@@ -379,6 +380,7 @@ def executar_fix_and_optimize_cursos(
             resolver=resolver,
             ler_solucao=ler_solucao,
             tempo_fim_total=tempo_fim_total,
+            salvar_candidatos=salvar_candidatos,
         )
 
         melhorias_na_passada = sum(1 for reg in hist_passada if reg["melhorou"])
@@ -449,6 +451,11 @@ def main() -> dict:
     parser.add_argument("--tempo-total", type=float, default=None)
     parser.add_argument("--log-csv", default=ARQUIVO_HISTORICO_CSV_PADRAO)
     parser.add_argument("--log-json", default=ARQUIVO_HISTORICO_JSON_PADRAO)
+    parser.add_argument(
+        "--salvar-candidatos",
+        action="store_true",
+        help="Salva solucoes candidatas por curso para debug. Por padrao, candidatos ficam apenas em memoria.",
+    )
     args = parser.parse_args()
 
     if args.etapa == "curso":
@@ -474,6 +481,7 @@ def main() -> dict:
             tempo_subproblema=args.tempo_subproblema,
             tempo_total_maximo=args.tempo_total,
             apenas_uma_passada=args.etapa == "passada-cursos",
+            salvar_candidatos=args.salvar_candidatos,
         )
     else:
         resultado = gerar_primeira_solucao(
