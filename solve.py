@@ -12,6 +12,7 @@ from lns_fix_and_optimize import (
     aplicar_start_e_fixacao_x,
     disciplinas_da_fase,
     disciplinas_do_curso,
+    extrair_solucao_x,
     parse_solucao_x,
 )
 import argparse
@@ -292,6 +293,8 @@ def resolver_modelo(modelo_alocacao, parametros_gurobi=None, arquivo_solucao=Non
     if arquivo_solucao and m.SolCount > 0:
         m.write(arquivo_solucao)
 
+    solucao_x = extrair_solucao_x(modelo_alocacao.x) if m.SolCount > 0 else None
+
     # # Para utilizar solução salva :
     # m.Params.MIPGap = 0.05
     # m.update()
@@ -315,6 +318,7 @@ def resolver_modelo(modelo_alocacao, parametros_gurobi=None, arquivo_solucao=Non
         "restricoes_removidas": sorted(modelo_alocacao.restricoes_removidas),
         "parametros_gurobi": parametros_gurobi,
         "arquivo_solucao": arquivo_solucao if m.SolCount > 0 else None,
+        "solucao_x": solucao_x,
         "lns": modelo_alocacao.resumo_lns,
         "disciplinas_livres": sorted(modelo_alocacao.disciplinas_livres),
     }

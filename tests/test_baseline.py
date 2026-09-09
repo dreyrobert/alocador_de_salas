@@ -29,6 +29,28 @@ class ValorSolucao:
         self.X = valor
 
 
+class ModeloGurobiFake:
+    def __init__(self):
+        self.SolCount = 1
+        self.status = 2
+        self.ObjVal = 10.0
+        self.ObjBound = 10.0
+        self.MIPGap = 0.0
+        self.Runtime = 0.5
+        self.parametros = {}
+        self.otimizou = False
+        self.arquivo_escrito = None
+
+    def setParam(self, parametro, valor):
+        self.parametros[parametro] = valor
+
+    def optimize(self):
+        self.otimizou = True
+
+    def write(self, arquivo_solucao):
+        self.arquivo_escrito = arquivo_solucao
+
+
 def cria_disciplina(codigo, horarios, curso="CIÊNCIA DA COMPUTAÇÃO", fase="1", alunos=20):
     return Disciplina(
         curso,
@@ -278,6 +300,56 @@ class TestVerificaSolucao(unittest.TestCase):
             conflitos = VerificaSolucao(disciplinas, salas, horarios, x).verifica_conflito_turno()
 
         self.assertEqual(conflitos, [])
+
+
+class TestResolverModelo(unittest.TestCase):
+    def test_retorna_solucao_x_em_memoria_quando_ha_solucao(self):
+        import solve
+
+        class GRBFake:
+            OPTIMAL = 2
+            TIME_LIMIT = 9
+            INFEASIBLE = 3
+            INF_OR_UNBD = 4
+            UNBOUNDED = 5
+            SOLUTION_LIMIT = 10
+            INTERRUPTED = 11
+
+        modelo = ModeloGurobiFake()
+        modelo_alocacao = type(
+            "ModeloAlocacaoFake",
+            (),
+            {
+                "modelo": modelo,
+                "x": {
+                    ("D1", "101-A", "Horario_2_1"): ValorSolucao(1.0),
+                    ("D1", "102-A", "Horario_2_1"): ValorSolucao(0.0),
+                },
+                "restricoes_removidas": {"c1"},
+                "resumo_lns": {"variaveis_x_total": 2},
+                "disciplinas_livres": {"D1"},
+            },
+        )()
+
+        with patch.object(solve, "gp", type("GpFake", (), {"GRB": GRBFake})):
+            with redirect_stdout(StringIO()):
+                resultado = solve.resolver_modelo(
+                    modelo_alocacao,
+                    parametros_gurobi={"TimeLimit": 5},
+                    arquivo_solucao="saida.sol",
+                )
+
+        self.assertTrue(modelo.otimizou)
+        self.assertEqual(modelo.parametros["TimeLimit"], 5)
+        self.assertEqual(modelo.arquivo_escrito, "saida.sol")
+        self.assertEqual(
+            resultado["solucao_x"],
+            {
+                ("D1", "101-A", "Horario_2_1"): 1,
+                ("D1", "102-A", "Horario_2_1"): 0,
+            },
+        )
+        self.assertEqual(resultado["arquivo_solucao"], "saida.sol")
 
 
 @unittest.skipUnless(TEM_PANDAS, "pandas nao esta instalado")
