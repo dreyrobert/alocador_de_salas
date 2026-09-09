@@ -118,21 +118,10 @@ def vizinhanca_por_curso(disciplinas, curso: str) -> Vizinhanca:
     )
 
 
-def aplicar_start_e_fixacao_x(
-    x_vars,
-    solucao_x: dict[XKey, int],
-    disciplinas_liberadas: Iterable[str],
-) -> dict[str, int]:
-    """Aplica MIP start em todos os x e fixa os x fora da vizinhanca.
-
-    `x_vars` deve ser um dicionario no formato usado pelo `solve.py`:
-    `(disciplina, sala, horario) -> variavel Gurobi`.
-    """
-    liberadas = set(disciplinas_liberadas)
+def aplicar_start_x(x_vars, solucao_x: dict[XKey, int]) -> dict[str, int]:
+    """Aplica MIP start nas variaveis x usando a solucao incumbente."""
     resumo = {
         "variaveis_x_total": 0,
-        "variaveis_x_livres": 0,
-        "variaveis_x_fixadas": 0,
         "valores_start_definidos": 0,
         "chaves_sem_valor_incumbente": 0,
     }
@@ -147,15 +136,87 @@ def aplicar_start_e_fixacao_x(
         variavel.Start = valor
         resumo["valores_start_definidos"] += 1
 
+    return resumo
+
+
+def fixar_fora_da_vizinhanca_x(
+    x_vars,
+    solucao_x: dict[XKey, int],
+    disciplinas_liberadas: Iterable[str],
+) -> tuple[set[XKey], dict[str, int]]:
+    """Fixa variaveis x fora da vizinhanca e retorna as chaves fixadas."""
+    liberadas = set(disciplinas_liberadas)
+    chaves_fixadas: set[XKey] = set()
+    resumo = {
+        "variaveis_x_total": 0,
+        "variaveis_x_livres": 0,
+        "variaveis_x_fixadas": 0,
+        "chaves_sem_valor_incumbente": 0,
+    }
+
+    for chave, variavel in x_vars.items():
+        resumo["variaveis_x_total"] += 1
+        valor = solucao_x.get(chave)
+        if valor is None:
+            valor = 0
+            resumo["chaves_sem_valor_incumbente"] += 1
+
         if chave[0] in liberadas:
             resumo["variaveis_x_livres"] += 1
             continue
 
         variavel.LB = valor
         variavel.UB = valor
+        chaves_fixadas.add(chave)
         resumo["variaveis_x_fixadas"] += 1
 
-    return resumo
+    return chaves_fixadas, resumo
+
+
+def liberar_fixacoes_x(
+    x_vars,
+    chaves_fixadas: Iterable[XKey],
+    lb_padrao: int = 0,
+    ub_padrao: int = 1,
+) -> int:
+    """Libera fixacoes anteriores das variaveis x."""
+    liberadas = 0
+    for chave in chaves_fixadas:
+        variavel = x_vars.get(chave)
+        if variavel is None:
+            continue
+
+        variavel.LB = lb_padrao
+        variavel.UB = ub_padrao
+        liberadas += 1
+
+    return liberadas
+
+
+def aplicar_start_e_fixacao_x(
+    x_vars,
+    solucao_x: dict[XKey, int],
+    disciplinas_liberadas: Iterable[str],
+) -> dict[str, int]:
+    """Aplica MIP start em todos os x e fixa os x fora da vizinhanca.
+
+    `x_vars` deve ser um dicionario no formato usado pelo `solve.py`:
+    `(disciplina, sala, horario) -> variavel Gurobi`.
+    """
+    resumo_start = aplicar_start_x(x_vars, solucao_x)
+    _, resumo_fixacao = fixar_fora_da_vizinhanca_x(
+        x_vars,
+        solucao_x,
+        disciplinas_liberadas,
+    )
+
+    return {
+        "variaveis_x_total": resumo_start["variaveis_x_total"],
+        "variaveis_x_livres": resumo_fixacao["variaveis_x_livres"],
+        "variaveis_x_fixadas": resumo_fixacao["variaveis_x_fixadas"],
+        "valores_start_definidos": resumo_start["valores_start_definidos"],
+        "chaves_sem_valor_incumbente": resumo_start["chaves_sem_valor_incumbente"],
+    }
 
 
 def solucao_melhorou(atual: dict | None, candidata: dict | None) -> bool:

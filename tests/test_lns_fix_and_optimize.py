@@ -4,10 +4,13 @@ from pathlib import Path
 
 from lns_fix_and_optimize import (
     aplicar_start_e_fixacao_x,
+    aplicar_start_x,
     cursos_da_instancia,
     disciplinas_da_fase,
     disciplinas_do_curso,
     extrair_solucao_x,
+    fixar_fora_da_vizinhanca_x,
+    liberar_fixacoes_x,
     parse_objetivo_sol,
     parse_solucao_x,
     salvar_historico_csv,
@@ -128,6 +131,58 @@ class TestLnsFixAndOptimize(unittest.TestCase):
         self.assertEqual(resumo["variaveis_x_livres"], 1)
         self.assertEqual(resumo["variaveis_x_fixadas"], 2)
         self.assertEqual(resumo["chaves_sem_valor_incumbente"], 1)
+
+    def test_helpers_aplicam_start_fixam_liberam_e_refixam_x(self):
+        x_vars = {
+            ("D1", "101-A", "Horario_2_1"): VarFake(),
+            ("D2", "102-A", "Horario_2_1"): VarFake(),
+            ("D3", "103-A", "Horario_2_1"): VarFake(),
+        }
+        solucao = {
+            ("D1", "101-A", "Horario_2_1"): 1,
+            ("D2", "102-A", "Horario_2_1"): 0,
+            ("D3", "103-A", "Horario_2_1"): 1,
+        }
+
+        resumo_start = aplicar_start_x(x_vars, solucao)
+        chaves_fixadas_cc, resumo_fixacao_cc = fixar_fora_da_vizinhanca_x(
+            x_vars,
+            solucao,
+            {"D1"},
+        )
+
+        self.assertEqual(resumo_start["valores_start_definidos"], 3)
+        self.assertEqual(chaves_fixadas_cc, {
+            ("D2", "102-A", "Horario_2_1"),
+            ("D3", "103-A", "Horario_2_1"),
+        })
+        self.assertIsNone(x_vars[("D1", "101-A", "Horario_2_1")].LB)
+        self.assertEqual(x_vars[("D2", "102-A", "Horario_2_1")].LB, 0)
+        self.assertEqual(x_vars[("D3", "103-A", "Horario_2_1")].UB, 1)
+        self.assertEqual(resumo_fixacao_cc["variaveis_x_livres"], 1)
+        self.assertEqual(resumo_fixacao_cc["variaveis_x_fixadas"], 2)
+
+        liberadas = liberar_fixacoes_x(x_vars, chaves_fixadas_cc)
+
+        self.assertEqual(liberadas, 2)
+        self.assertEqual(x_vars[("D2", "102-A", "Horario_2_1")].LB, 0)
+        self.assertEqual(x_vars[("D2", "102-A", "Horario_2_1")].UB, 1)
+        self.assertEqual(x_vars[("D3", "103-A", "Horario_2_1")].LB, 0)
+        self.assertEqual(x_vars[("D3", "103-A", "Horario_2_1")].UB, 1)
+
+        chaves_fixadas_adm, _ = fixar_fora_da_vizinhanca_x(
+            x_vars,
+            solucao,
+            {"D2"},
+        )
+
+        self.assertEqual(chaves_fixadas_adm, {
+            ("D1", "101-A", "Horario_2_1"),
+            ("D3", "103-A", "Horario_2_1"),
+        })
+        self.assertEqual(x_vars[("D1", "101-A", "Horario_2_1")].LB, 1)
+        self.assertEqual(x_vars[("D2", "102-A", "Horario_2_1")].LB, 0)
+        self.assertEqual(x_vars[("D2", "102-A", "Horario_2_1")].UB, 1)
 
     def test_parse_objetivo_sol_recupera_valor_do_cabecalho(self):
         conteudo = "# Objective value = 186294.5\nx[D1,101-A,Horario_2_1] 1\n"
