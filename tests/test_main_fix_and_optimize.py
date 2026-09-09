@@ -258,10 +258,11 @@ class TestMainFixAndOptimize(unittest.TestCase):
 
             # CC melhora (180.0), ADM nao melhora (190.0 > 180.0)
             objetivos = {"CC": 180.0, "ADM": 190.0}
+            chamadas = []
 
             def resolver_fake(modelo, parametros_gurobi=None, arquivo_solucao=None):
-                # Extrai o curso a partir do arquivo_solucao
-                curso = "CC" if "CC" in arquivo_solucao else "ADM"
+                curso = ["CC", "ADM"][len(chamadas)]
+                chamadas.append((curso, arquivo_solucao))
                 obj = objetivos[curso]
                 if arquivo_solucao:
                     Path(arquivo_solucao).write_text(f"# Objective value = {obj}\n", encoding="utf-8")
@@ -270,6 +271,7 @@ class TestMainFixAndOptimize(unittest.TestCase):
                     "solucoes": 1,
                     "objetivo": obj,
                     "arquivo_solucao": arquivo_solucao,
+                    "solucao_x": {("D1", "101-A", "Horario_2_1"): 1 if curso == "CC" else 0},
                     "lns": {"variaveis_x_livres": 5, "variaveis_x_fixadas": 95},
                 }
 
@@ -291,6 +293,47 @@ class TestMainFixAndOptimize(unittest.TestCase):
             self.assertEqual(historico[0]["curso"], "CC")
             self.assertFalse(historico[1]["melhorou"])
             self.assertEqual(historico[1]["curso"], "ADM")
+            self.assertFalse((Path(temp_dir) / "candidatos").exists())
+            self.assertEqual(chamadas, [("CC", None), ("ADM", None)])
+
+    def test_executar_passada_por_cursos_pode_salvar_candidatos_para_debug(self):
+        disciplinas = {
+            "D1": DisciplinaFake("CC", 1, 30, ["Horario_2_1"]),
+        }
+        instancia = InstanciaFake(disciplinas)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            incumbente_sol = Path(temp_dir) / "primeira.sol"
+            incumbente_sol.write_text("# Objective value = 200.0\nx[D1,101-A,Horario_2_1] 1\n", encoding="utf-8")
+            melhor_sol = Path(temp_dir) / "melhor.sol"
+            pasta_candidatos = Path(temp_dir) / "candidatos"
+
+            def resolver_fake(modelo, parametros_gurobi=None, arquivo_solucao=None):
+                if arquivo_solucao:
+                    Path(arquivo_solucao).write_text("# Objective value = 180.0\n", encoding="utf-8")
+                return {
+                    "status_nome": "OPTIMAL",
+                    "solucoes": 1,
+                    "objetivo": 180.0,
+                    "arquivo_solucao": arquivo_solucao,
+                    "solucao_x": {("D1", "101-A", "Horario_2_1"): 1},
+                    "lns": {"variaveis_x_livres": 5, "variaveis_x_fixadas": 95},
+                }
+
+            executar_passada_por_cursos(
+                arquivo_solucao_incumbente=incumbente_sol,
+                instancia=instancia,
+                cursos=["CC"],
+                arquivo_melhor_solucao=melhor_sol,
+                pasta_candidatos=pasta_candidatos,
+                tempo_subproblema=10,
+                construir=lambda inst, **kwargs: "modelo",
+                resolver=resolver_fake,
+                ler_solucao=lambda arq: {("D1", "101-A", "Horario_2_1"): 1},
+                salvar_candidatos=True,
+            )
+
+            self.assertTrue((pasta_candidatos / "candidato_curso_CC.sol").exists())
             self.assertTrue(melhor_sol.exists())
 
     def test_executar_passada_por_cursos_limita_subproblema_ao_tempo_restante(self):
@@ -313,6 +356,7 @@ class TestMainFixAndOptimize(unittest.TestCase):
                     "solucoes": 1,
                     "objetivo": 200.0,
                     "arquivo_solucao": arquivo_solucao,
+                    "solucao_x": {("D1", "101-A", "Horario_2_1"): 1},
                     "lns": {"variaveis_x_livres": 5, "variaveis_x_fixadas": 95},
                 }
 

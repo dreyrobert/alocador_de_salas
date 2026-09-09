@@ -67,8 +67,11 @@ def gerar_primeira_solucao(
     resolver: Callable = resolver_modelo,
 ) -> dict:
     """Gera a solucao inicial para a rotina fix-and-optimize."""
-    caminho_solucao = Path(arquivo_solucao)
-    caminho_solucao.parent.mkdir(parents=True, exist_ok=True)
+    arquivo_solucao_str = None
+    if arquivo_solucao:
+        caminho_solucao = Path(arquivo_solucao)
+        caminho_solucao.parent.mkdir(parents=True, exist_ok=True)
+        arquivo_solucao_str = str(caminho_solucao)
 
     instancia = carregar(
         arquivo_horarios,
@@ -82,7 +85,7 @@ def gerar_primeira_solucao(
             tempo_modelo=tempo_modelo,
             tempo_heuristica=tempo_heuristica,
         ),
-        arquivo_solucao=str(caminho_solucao),
+        arquivo_solucao=arquivo_solucao_str,
     )
     resultado["etapa"] = "primeira_solucao"
     return resultado
@@ -188,7 +191,7 @@ def reotimizar_vizinhanca_curso(
 
 
 def executar_passada_por_cursos(
-    arquivo_solucao_incumbente: str | Path,
+    arquivo_solucao_incumbente: str | Path | dict,
     instancia: InstanciaAlocacao,
     cursos: list[str] | None = None,
     arquivo_melhor_solucao: str | Path = ARQUIVO_MELHOR_SOLUCAO_PADRAO,
@@ -200,14 +203,19 @@ def executar_passada_por_cursos(
     resolver: Callable = resolver_modelo,
     ler_solucao: Callable = parse_solucao_x,
     tempo_fim_total: float | None = None,
+    salvar_candidatos: bool = False,
 ) -> tuple[dict, list[dict]]:
     """Executa uma passada completa de fix-and-optimize sobre a lista de cursos."""
-    caminho_incumbente = Path(arquivo_solucao_incumbente)
     caminho_melhor = Path(arquivo_melhor_solucao)
     caminho_melhor.parent.mkdir(parents=True, exist_ok=True)
 
-    if caminho_incumbente.resolve() != caminho_melhor.resolve() and caminho_incumbente.exists():
-        shutil.copyfile(caminho_incumbente, caminho_melhor)
+    if isinstance(arquivo_solucao_incumbente, dict):
+        solucao_x_atual = arquivo_solucao_incumbente
+    else:
+        caminho_incumbente = Path(arquivo_solucao_incumbente)
+        if caminho_incumbente.resolve() != caminho_melhor.resolve() and caminho_incumbente.exists():
+            shutil.copyfile(caminho_incumbente, caminho_melhor)
+        solucao_x_atual = ler_solucao(caminho_melhor)
 
     if objetivo_incumbente_inicial is None:
         objetivo_incumbente_inicial = parse_objetivo_sol(caminho_melhor)
@@ -216,15 +224,15 @@ def executar_passada_por_cursos(
         "solucoes": 1 if objetivo_incumbente_inicial is not None else 0,
         "objetivo": objetivo_incumbente_inicial,
         "arquivo_solucao": str(caminho_melhor),
+        "solucao_x": solucao_x_atual,
     }
 
     if cursos is None:
         cursos = cursos_da_instancia(instancia)
 
     pasta_cand = Path(pasta_candidatos)
-    pasta_cand.mkdir(parents=True, exist_ok=True)
-
-    solucao_x_atual = ler_solucao(caminho_melhor)
+    if salvar_candidatos:
+        pasta_cand.mkdir(parents=True, exist_ok=True)
     historico_passada: list[dict] = []
 
     for idx, curso in enumerate(cursos, start=1):
@@ -236,13 +244,14 @@ def executar_passada_por_cursos(
             tempo_subproblema_efetivo = min(tempo_subproblema, tempo_restante)
 
         arquivo_candidato = pasta_cand / f"candidato_curso_{curso}.sol"
+        arquivo_candidato_str = str(arquivo_candidato) if salvar_candidatos else None
         t0 = time.time()
 
         obj_anterior = incumbente_atual.get("objetivo")
         resultado_candidato = reotimizar_vizinhanca_curso(
             arquivo_solucao_incumbente=solucao_x_atual,
             curso_livre=curso,
-            arquivo_solucao=str(arquivo_candidato),
+            arquivo_solucao=arquivo_candidato_str,
             tempo_subproblema=tempo_subproblema_efetivo,
             instancia=instancia,
             construir=construir,
@@ -253,11 +262,17 @@ def executar_passada_por_cursos(
 
         melhorou = solucao_melhorou(incumbente_atual, resultado_candidato)
         if melhorou:
-            if arquivo_candidato.exists():
+            solucao_candidata_x = resultado_candidato.get("solucao_x")
+            if solucao_candidata_x is not None:
+                solucao_x_atual = solucao_candidata_x
+            elif salvar_candidatos and arquivo_candidato.exists():
+                solucao_x_atual = ler_solucao(arquivo_candidato)
+
+            if salvar_candidatos and arquivo_candidato.exists():
                 shutil.copyfile(arquivo_candidato, caminho_melhor)
-                solucao_x_atual = ler_solucao(caminho_melhor)
             incumbente_atual = resultado_candidato
             incumbente_atual["arquivo_solucao"] = str(caminho_melhor)
+            incumbente_atual["solucao_x"] = solucao_x_atual
 
         lns_info = resultado_candidato.get("lns") or {}
         registro = {
