@@ -52,6 +52,16 @@ def parse_solucao_x(caminho_solucao: str | Path) -> dict[XKey, int]:
     return solucao
 
 
+def extrair_solucao_x(x_vars) -> dict[XKey, int]:
+    """Extrai variaveis x[d,s,h] diretamente do modelo resolvido."""
+    solucao: dict[XKey, int] = {}
+
+    for chave, variavel in x_vars.items():
+        solucao[chave] = int(round(float(variavel.X)))
+
+    return solucao
+
+
 def parse_objetivo_sol(caminho_solucao: str | Path) -> float | None:
     """Le o valor objetivo registrado no cabecalho de um arquivo .sol."""
     with Path(caminho_solucao).open(encoding="utf-8") as arquivo:

@@ -7,6 +7,7 @@ from lns_fix_and_optimize import (
     cursos_da_instancia,
     disciplinas_da_fase,
     disciplinas_do_curso,
+    extrair_solucao_x,
     parse_objetivo_sol,
     parse_solucao_x,
     salvar_historico_csv,
@@ -22,7 +23,8 @@ class DisciplinaFake:
 
 
 class VarFake:
-    def __init__(self):
+    def __init__(self, x=None):
+        self.X = x
         self.Start = None
         self.LB = None
         self.UB = None
@@ -48,6 +50,24 @@ class TestLnsFixAndOptimize(unittest.TestCase):
         self.assertEqual(solucao[("D1", "101-A", "Horario_2_1")], 1)
         self.assertEqual(solucao[("D1", "102-A", "Horario_2_1")], 0)
         self.assertNotIn(("D1", "101-A"), solucao)
+
+    def test_extrair_solucao_x_le_variaveis_em_memoria(self):
+        x_vars = {
+            ("D1", "101-A", "Horario_2_1"): VarFake(1.0),
+            ("D1", "102-A", "Horario_2_1"): VarFake(0.0),
+            ("D2", "101-A", "Horario_2_2"): VarFake(0.999999),
+        }
+
+        solucao = extrair_solucao_x(x_vars)
+
+        self.assertEqual(
+            solucao,
+            {
+                ("D1", "101-A", "Horario_2_1"): 1,
+                ("D1", "102-A", "Horario_2_1"): 0,
+                ("D2", "101-A", "Horario_2_2"): 1,
+            },
+        )
 
     def test_seletores_de_disciplina_por_fase_e_curso(self):
         disciplinas = {
