@@ -1,0 +1,2 @@
+cenario,status_nome,solucoes,objetivo,bound,gap,tempo,restricoes_removidas,parametros_gurobi
+viabilidade_mipfocus_norel,TIME_LIMIT,10,185263.5,181323.50193858845,0.02126699571913274,14400.211163043976,,"{""MIPFocus"": 1, ""NoRelHeurTime"": 300.0, ""TimeLimit"": 14400.0}"

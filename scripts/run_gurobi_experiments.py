@@ -10,6 +10,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from solve import main
 
 
+def resumo_serializavel(resultado):
+    campos = [
+        "cenario",
+        "status_nome",
+        "solucoes",
+        "objetivo",
+        "bound",
+        "gap",
+        "tempo",
+        "restricoes_removidas",
+        "parametros_gurobi",
+    ]
+    return {campo: resultado.get(campo) for campo in campos}
+
+
 def cenarios(time_limit, no_rel_heur_time):
     parametros_base = {"TimeLimit": time_limit}
     parametros_viabilidade = {
@@ -74,7 +89,7 @@ def main_cli():
         )
         resultado["cenario"] = nome
         resultados.append(resultado)
-        print("RESULTADO_JSON=" + json.dumps(resultado, ensure_ascii=False, sort_keys=True))
+        print("RESULTADO_JSON=" + json.dumps(resumo_serializavel(resultado), ensure_ascii=False, sort_keys=True))
 
     campos = [
         "cenario",

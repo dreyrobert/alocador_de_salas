@@ -1,0 +1,2 @@
+cenario,status_nome,solucoes,objetivo,bound,gap,tempo,restricoes_removidas,parametros_gurobi
+base_tlim,TIME_LIMIT,10,187451.5,181572.1986617,0.031364,14400.35,,"{""TimeLimit"": 14400}"

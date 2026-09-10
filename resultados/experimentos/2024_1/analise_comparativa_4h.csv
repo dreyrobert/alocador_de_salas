@@ -1,0 +1,4 @@
+metodo,parametros,tempo_total_s,tempo_total_h,status,objetivo_final,bound,gap_percentual,diferenca_vs_pli_base,diferenca_vs_pli_mipfocus_norel,objetivo_inicial_fixopt,ganho_fixopt,subproblemas_resolvidos,melhorias_aceitas,observacao
+PLI base,TimeLimit=14400,14400.35,4.0,TIME_LIMIT,187451.5,181572.1986617,3.1364,0.0,2188.0,,,,,PLI puro com limite de 4h.
+PLI MIPFocus + NoRel,TimeLimit=14400; MIPFocus=1; NoRelHeurTime=300,14400.21,4.0,TIME_LIMIT,185263.5,181323.50193858845,2.1267,-2188.0,0.0,,,,,Mesmo ajuste heuristico usado na primeira solucao do Fix-and-Optimize.
+Fix-and-Optimize por curso,Total=14400; primeira_solucao=300; subproblemas ate tempo restante,7297.79,2.03,CONCLUIDO,186105.5,,,-1346.0,842.0,186294.0,188.5,26,5,Parou apos segunda passada sem melhorias nas vizinhancas por curso.
