@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import time
 from pathlib import Path
 from typing import Callable
@@ -16,10 +15,9 @@ from solve import (
     resolver_modelo,
 )
 from lns_fix_and_optimize import (
+    SolucaoX,
     Vizinhanca,
     cursos_da_instancia,
-    parse_objetivo_sol,
-    parse_solucao_x,
     salvar_historico_csv,
     salvar_solucao_x,
     solucao_melhorou,
@@ -58,7 +56,7 @@ def parametros_subproblema(tempo_subproblema: float = 300) -> dict[str, float | 
 
 def reotimizar_vizinhanca(
     modelo_alocacao,
-    solucao_incumbente_x: dict,
+    solucao_incumbente_x: SolucaoX,
     vizinhanca: Vizinhanca,
     tempo_subproblema: float,
     arquivo_solucao: str | None = None,
@@ -88,40 +86,25 @@ def reotimizar_vizinhanca(
 
 
 def executar_passada_por_cursos(
-    arquivo_solucao_incumbente: str | Path | dict,
+    solucao_incumbente_x: SolucaoX,
     instancia: InstanciaAlocacao,
     modelo_alocacao,
     cursos: list[str] | None = None,
-    arquivo_melhor_solucao: str | Path = ARQUIVO_MELHOR_SOLUCAO_PADRAO,
     pasta_candidatos: str | Path = PASTA_CANDIDATOS_PADRAO,
     tempo_subproblema: float = 60,
     numero_passada: int = 1,
     objetivo_incumbente_inicial: float | None = None,
     preparar_modelo: Callable = preparar_modelo_para_vizinhanca,
     resolver: Callable = resolver_modelo,
-    ler_solucao: Callable = parse_solucao_x,
     tempo_fim_total: float | None = None,
     salvar_candidatos: bool = False,
 ) -> tuple[dict, list[dict]]:
     """Executa uma passada completa de fix-and-optimize sobre a lista de cursos."""
-    caminho_melhor = Path(arquivo_melhor_solucao)
-    caminho_melhor.parent.mkdir(parents=True, exist_ok=True)
-
-    if isinstance(arquivo_solucao_incumbente, dict):
-        solucao_x_atual = arquivo_solucao_incumbente
-    else:
-        caminho_incumbente = Path(arquivo_solucao_incumbente)
-        if caminho_incumbente.resolve() != caminho_melhor.resolve() and caminho_incumbente.exists():
-            shutil.copyfile(caminho_incumbente, caminho_melhor)
-        solucao_x_atual = ler_solucao(caminho_melhor)
-
-    if objetivo_incumbente_inicial is None and caminho_melhor.exists():
-        objetivo_incumbente_inicial = parse_objetivo_sol(caminho_melhor)
-
+    solucao_x_atual = solucao_incumbente_x
     incumbente_atual = {
         "solucoes": 1 if objetivo_incumbente_inicial is not None else 0,
         "objetivo": objetivo_incumbente_inicial,
-        "arquivo_solucao": str(caminho_melhor),
+        "arquivo_solucao": None,
         "solucao_x": solucao_x_atual,
     }
 
@@ -165,15 +148,11 @@ def executar_passada_por_cursos(
         melhorou = solucao_melhorou(incumbente_atual, resultado_candidato)
         if melhorou:
             solucao_candidata_x = resultado_candidato.get("solucao_x")
-            if solucao_candidata_x is not None:
-                solucao_x_atual = solucao_candidata_x
-            elif salvar_candidatos and arquivo_candidato.exists():
-                solucao_x_atual = ler_solucao(arquivo_candidato)
+            if solucao_candidata_x is None:
+                raise ValueError("Subproblema melhorou, mas nao retornou solucao_x em memoria.")
 
-            if salvar_candidatos and arquivo_candidato.exists():
-                shutil.copyfile(arquivo_candidato, caminho_melhor)
+            solucao_x_atual = solucao_candidata_x
             incumbente_atual = resultado_candidato
-            incumbente_atual["arquivo_solucao"] = str(caminho_melhor)
             incumbente_atual["solucao_x"] = solucao_x_atual
 
         lns_info = resultado_candidato.get("lns") or {}
@@ -216,7 +195,6 @@ def executar_fix_and_optimize_cursos(
     preparar_modelo: Callable = preparar_modelo_para_vizinhanca,
     liberar_modelo: Callable = liberar_fixacoes_modelo,
     resolver: Callable = resolver_modelo,
-    ler_solucao: Callable = parse_solucao_x,
 ) -> dict:
     """Executa a rotina completa de fix-and-optimize iterando sobre os cursos."""
     t_inicio_total = time.time()
@@ -233,74 +211,82 @@ def executar_fix_and_optimize_cursos(
     )
 
     modelo_alocacao = construir(instancia)
-    resultado_inicial = resolver(
-        modelo_alocacao,
-        parametros_gurobi=parametros_primeira_solucao(
-            tempo_modelo=tempo_modelo_inicial,
-            tempo_heuristica=tempo_heuristica_inicial,
-        ),
-        arquivo_solucao=None,
-    )
-    resultado_inicial["etapa"] = "primeira_solucao"
-    obj_inicial = resultado_inicial.get("objetivo")
-    solucao_x_atual = resultado_inicial.get("solucao_x")
-    solucao_base = resultado_inicial.get("arquivo_solucao")
-    if solucao_x_atual is None and solucao_base and Path(solucao_base).exists():
-        solucao_x_atual = ler_solucao(solucao_base)
-
     caminho_melhor = Path(arquivo_melhor_solucao)
     caminho_melhor.parent.mkdir(parents=True, exist_ok=True)
-
-    cursos = cursos_da_instancia(instancia)
     historico_total: list[dict] = []
-    incumbente_atual = {
-        "solucoes": 1 if obj_inicial is not None else 0,
-        "objetivo": obj_inicial,
-        "arquivo_solucao": str(caminho_melhor),
-        "solucao_x": solucao_x_atual,
-    }
-
     passadas_feitas = 0
     melhorias_totais = 0
-    passada = 1
+    status_execucao = "CONCLUIDO"
+    obj_inicial = None
+    obj_final = None
+    solucao_final_x: SolucaoX | None = None
 
-    while incumbente_atual.get("solucao_x") is not None:
-        if tempo_total_maximo and (time.time() - t_inicio_total) >= tempo_total_maximo:
-            break
-
-        cursos_rodada = list(cursos)
-
-        incumbente_passada, hist_passada = executar_passada_por_cursos(
-            arquivo_solucao_incumbente=incumbente_atual.get("solucao_x"),
-            instancia=instancia,
-            modelo_alocacao=modelo_alocacao,
-            cursos=cursos_rodada,
-            arquivo_melhor_solucao=caminho_melhor,
-            tempo_subproblema=tempo_subproblema,
-            numero_passada=passada,
-            objetivo_incumbente_inicial=incumbente_atual.get("objetivo"),
-            preparar_modelo=preparar_modelo,
-            resolver=resolver,
-            ler_solucao=ler_solucao,
-            tempo_fim_total=tempo_fim_total,
-            salvar_candidatos=salvar_candidatos,
+    try:
+        resultado_inicial = resolver(
+            modelo_alocacao,
+            parametros_gurobi=parametros_primeira_solucao(
+                tempo_modelo=tempo_modelo_inicial,
+                tempo_heuristica=tempo_heuristica_inicial,
+            ),
+            arquivo_solucao=None,
         )
+        resultado_inicial["etapa"] = "primeira_solucao"
+        obj_inicial = resultado_inicial.get("objetivo")
+        solucao_x_atual: SolucaoX | None = resultado_inicial.get("solucao_x")
 
-        melhorias_na_passada = sum(1 for reg in hist_passada if reg["melhorou"])
-        melhorias_totais += melhorias_na_passada
-        historico_total.extend(hist_passada)
-        incumbente_atual = incumbente_passada
-        passadas_feitas += 1
+        incumbente_atual = {
+            "solucoes": 1 if obj_inicial is not None else 0,
+            "objetivo": obj_inicial,
+            "arquivo_solucao": str(caminho_melhor),
+            "solucao_x": solucao_x_atual,
+        }
 
-        if apenas_uma_passada:
-            break
+        if solucao_x_atual is None:
+            status_execucao = "SEM_SOLUCAO_INICIAL"
+        else:
+            cursos = cursos_da_instancia(instancia)
+            passada = 1
 
-        if melhorias_na_passada == 0:
-            # Otimo local alcancado com respeito a vizinhancas unicas por curso
-            break
-        passada += 1
+            while incumbente_atual.get("solucao_x") is not None:
+                if tempo_total_maximo and (time.time() - t_inicio_total) >= tempo_total_maximo:
+                    break
 
-    liberar_modelo(modelo_alocacao)
+                cursos_rodada = list(cursos)
+
+                incumbente_passada, hist_passada = executar_passada_por_cursos(
+                    solucao_incumbente_x=incumbente_atual["solucao_x"],
+                    instancia=instancia,
+                    modelo_alocacao=modelo_alocacao,
+                    cursos=cursos_rodada,
+                    tempo_subproblema=tempo_subproblema,
+                    numero_passada=passada,
+                    objetivo_incumbente_inicial=incumbente_atual.get("objetivo"),
+                    preparar_modelo=preparar_modelo,
+                    resolver=resolver,
+                    tempo_fim_total=tempo_fim_total,
+                    salvar_candidatos=salvar_candidatos,
+                )
+
+                melhorias_na_passada = sum(1 for reg in hist_passada if reg["melhorou"])
+                melhorias_totais += melhorias_na_passada
+                historico_total.extend(hist_passada)
+                incumbente_atual = incumbente_passada
+                passadas_feitas += 1
+
+                if apenas_uma_passada:
+                    break
+
+                if melhorias_na_passada == 0:
+                    # Otimo local alcancado com respeito a vizinhancas unicas por curso
+                    break
+                passada += 1
+
+        obj_final = incumbente_atual.get("objetivo")
+        solucao_final_x = incumbente_atual.get("solucao_x")
+        if arquivo_melhor_solucao and solucao_final_x is not None:
+            salvar_solucao_x(solucao_final_x, caminho_melhor, obj_final)
+    finally:
+        liberar_modelo(modelo_alocacao)
 
     if arquivo_log_csv:
         salvar_historico_csv(historico_total, arquivo_log_csv)
@@ -311,16 +297,11 @@ def executar_fix_and_optimize_cursos(
         caminho_json.write_text(json.dumps(historico_total, indent=2, ensure_ascii=False), encoding="utf-8")
 
     tempo_total_exec = round(time.time() - t_inicio_total, 2)
-    obj_final = incumbente_atual.get("objetivo")
-    solucao_final_x = incumbente_atual.get("solucao_x")
-    if arquivo_melhor_solucao and solucao_final_x is not None:
-        salvar_solucao_x(solucao_final_x, caminho_melhor, obj_final)
-
     ganho_absoluto = (obj_inicial - obj_final) if (obj_inicial is not None and obj_final is not None) else 0.0
 
     return {
         "etapa": "fix_and_optimize_cursos",
-        "status": "CONCLUIDO",
+        "status": status_execucao,
         "objetivo_inicial": obj_inicial,
         "objetivo_final": obj_final,
         "ganho_absoluto": ganho_absoluto,

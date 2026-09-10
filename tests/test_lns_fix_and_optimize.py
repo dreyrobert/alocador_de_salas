@@ -2,11 +2,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from lns_fix_and_optimize import (
+from lns_fix_and_optimize_compat import (
     aplicar_start_e_fixacao_x,
+    disciplinas_da_fase,
+)
+from lns_fix_and_optimize import (
     aplicar_start_x,
     cursos_da_instancia,
-    disciplinas_da_fase,
     disciplinas_do_curso,
     extrair_solucao_x,
     fixar_fora_da_vizinhanca_x,

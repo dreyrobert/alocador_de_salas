@@ -15,6 +15,7 @@ from typing import Iterable
 
 
 XKey = tuple[str, str, str]
+SolucaoX = dict[XKey, int]
 
 
 X_SOL_RE = re.compile(
@@ -32,9 +33,9 @@ class Vizinhanca:
     justificativa: str = ""
 
 
-def parse_solucao_x(caminho_solucao: str | Path) -> dict[XKey, int]:
+def parse_solucao_x(caminho_solucao: str | Path) -> SolucaoX:
     """Le variaveis x[d,s,h] de um arquivo .sol gerado pelo Gurobi."""
-    solucao: dict[XKey, int] = {}
+    solucao: SolucaoX = {}
 
     with Path(caminho_solucao).open(encoding="utf-8") as arquivo:
         for linha in arquivo:
@@ -52,9 +53,9 @@ def parse_solucao_x(caminho_solucao: str | Path) -> dict[XKey, int]:
     return solucao
 
 
-def extrair_solucao_x(x_vars) -> dict[XKey, int]:
+def extrair_solucao_x(x_vars) -> SolucaoX:
     """Extrai variaveis x[d,s,h] diretamente do modelo resolvido."""
-    solucao: dict[XKey, int] = {}
+    solucao: SolucaoX = {}
 
     for chave, variavel in x_vars.items():
         solucao[chave] = int(round(float(variavel.X)))
@@ -63,7 +64,7 @@ def extrair_solucao_x(x_vars) -> dict[XKey, int]:
 
 
 def salvar_solucao_x(
-    solucao_x: dict[XKey, int],
+    solucao_x: SolucaoX,
     caminho_solucao: str | Path,
     objetivo: float | None = None,
 ) -> None:
@@ -91,15 +92,6 @@ def parse_objetivo_sol(caminho_solucao: str | Path) -> float | None:
     return None
 
 
-def disciplinas_da_fase(disciplinas, curso: str, fase: int | str) -> set[str]:
-    fase_int = int(fase)
-    return {
-        disciplina
-        for disciplina, dados_disciplina in disciplinas.items()
-        if dados_disciplina.curso == curso and int(dados_disciplina.fase) == fase_int
-    }
-
-
 def disciplinas_do_curso(disciplinas, curso: str) -> set[str]:
     return {
         disciplina
@@ -118,7 +110,7 @@ def vizinhanca_por_curso(disciplinas, curso: str) -> Vizinhanca:
     )
 
 
-def aplicar_start_x(x_vars, solucao_x: dict[XKey, int]) -> dict[str, int]:
+def aplicar_start_x(x_vars, solucao_x: SolucaoX) -> dict[str, int]:
     """Aplica MIP start nas variaveis x usando a solucao incumbente."""
     resumo = {
         "variaveis_x_total": 0,
@@ -141,7 +133,7 @@ def aplicar_start_x(x_vars, solucao_x: dict[XKey, int]) -> dict[str, int]:
 
 def fixar_fora_da_vizinhanca_x(
     x_vars,
-    solucao_x: dict[XKey, int],
+    solucao_x: SolucaoX,
     disciplinas_liberadas: Iterable[str],
 ) -> tuple[set[XKey], dict[str, int]]:
     """Fixa variaveis x fora da vizinhanca e retorna as chaves fixadas."""
@@ -195,7 +187,7 @@ def liberar_fixacoes_x(
 
 def preparar_fixacao_vizinhanca_x(
     x_vars,
-    solucao_x: dict[XKey, int],
+    solucao_x: SolucaoX,
     disciplinas_liberadas: Iterable[str],
     chaves_fixadas_anteriores: Iterable[XKey] | None = None,
 ) -> tuple[set[XKey], dict[str, int]]:
@@ -220,28 +212,6 @@ def preparar_fixacao_vizinhanca_x(
         "fixacoes_liberadas": fixacoes_liberadas,
     }
     return chaves_fixadas, resumo
-
-
-def aplicar_start_e_fixacao_x(
-    x_vars,
-    solucao_x: dict[XKey, int],
-    disciplinas_liberadas: Iterable[str],
-) -> dict[str, int]:
-    """Aplica MIP start em todos os x e fixa os x fora da vizinhanca.
-
-    `x_vars` deve ser um dicionario no formato usado pelo `solve.py`:
-    `(disciplina, sala, horario) -> variavel Gurobi`.
-    """
-    _, resumo = preparar_fixacao_vizinhanca_x(x_vars, solucao_x, disciplinas_liberadas)
-
-    return {
-        "variaveis_x_total": resumo["variaveis_x_total"],
-        "variaveis_x_livres": resumo["variaveis_x_livres"],
-        "variaveis_x_fixadas": resumo["variaveis_x_fixadas"],
-        "valores_start_definidos": resumo["valores_start_definidos"],
-        "chaves_sem_valor_incumbente": resumo["chaves_sem_valor_incumbente"],
-    }
-
 
 def solucao_melhorou(atual: dict | None, candidata: dict | None) -> bool:
     """Retorna True se a candidata e viavel e reduz estritamente o objetivo."""

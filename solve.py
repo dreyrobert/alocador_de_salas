@@ -8,9 +8,11 @@ from extrai_horarios_aula import ExtraiHorariosAula
 from gera_matriz_distancia import GeraMatrizDistancia
 from gera_planilha_saida import GeraPlanilhaSaida
 from verifica_solucao import VerificaSolucao
-from lns_fix_and_optimize import (
+from lns_fix_and_optimize_compat import (
     aplicar_start_e_fixacao_x,
     disciplinas_da_fase,
+)
+from lns_fix_and_optimize import (
     disciplinas_do_curso,
     extrair_solucao_x,
     liberar_fixacoes_x,
