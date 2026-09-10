@@ -10,7 +10,10 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from lns_fix_and_optimize import SolucaoX, preparar_fixacao_vizinhanca_x
+from alocador_salas.optimization.lns_fix_and_optimize import (
+    SolucaoX,
+    preparar_fixacao_vizinhanca_x,
+)
 
 
 def disciplinas_da_fase(disciplinas, curso: str, fase: int | str) -> set[str]:

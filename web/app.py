@@ -1,11 +1,8 @@
 import os
-import sys
 import threading
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) )
-
 from flask import Flask, render_template, request, jsonify, redirect, url_for
-from solve import main
+from alocador_salas.optimization.solve import main
 from envia_email import EmailSender  
 app = Flask(__name__)
 

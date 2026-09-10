@@ -6,7 +6,7 @@ temporarios e experimentos.
 
 ## `fix_and_optimize/`
 
-Saidas padrao de `main_fix_and_optimize.py`.
+Saidas padrao de `alocador_salas.optimization.main_fix_and_optimize`.
 
 - `melhor_solucao_fix_and_optimize.sol`: melhor solucao encontrada pela rotina.
 - `solution.sol`: solucao historica que antes ficava na raiz do projeto.

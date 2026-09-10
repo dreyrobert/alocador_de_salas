@@ -47,6 +47,8 @@ Com as dependências instaladas podemos partir para a configuração da aplicaç
 -  `dados/2024_1/`: dados de entrada padrao usados pelos scripts atuais.
 -  `dados/historico/`: dados e solucoes de semestres anteriores.
 -  `dados/exemplos/`: arquivos pequenos usados para testes manuais.
+-  `src/alocador_salas/`: pacote Python com dominio, dados, otimizacao,
+   relatorios e validacao.
 -  `resultados/`: saidas geradas por execucoes, experimentos e diagnosticos.
 -  `docs/notes/`: notas tecnicas e registros de analise.
 -  `web/static/dados/`: arquivos usados ou gerados pela interface web.
@@ -59,4 +61,12 @@ Com as dependências instaladas podemos partir para a configuração da aplicaç
 
 Para rodar a interface web utilize o comando
 
-`python3 web/app.py`
+`uv run python web/app.py`
+
+Para rodar o modelo PLI diretamente:
+
+`uv run alocador-salas-solve`
+
+Para rodar a heuristica Fix-and-Optimize:
+
+`uv run alocador-salas-fixopt`

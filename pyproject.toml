@@ -18,5 +18,16 @@ dependencies = [
     "Werkzeug<2.1",
 ]
 
+[project.scripts]
+alocador-salas-solve = "alocador_salas.optimization.solve:main_cli"
+alocador-salas-fixopt = "alocador_salas.optimization.main_fix_and_optimize:main"
+
 [tool.uv]
-package = false
+package = true
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

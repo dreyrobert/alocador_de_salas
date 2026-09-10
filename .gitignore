@@ -6,6 +6,7 @@ __pycache__
 **/__pycache__/
 *.pyc
 .uv-cache/
+*.egg-info/
 matriz_distancia.csv
 solution.sol
 resultados/fix_and_optimize/*.csv

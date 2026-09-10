@@ -1,5 +1,5 @@
 import pandas as pd
-from classes.Sala import Sala
+from alocador_salas.domain.sala import Sala
 
 class ExtraiSalas:
     def __init__ (self, arquivo):

@@ -1,4 +1,4 @@
-from classes.Horario import Horario
+from alocador_salas.domain.horario import Horario
 import re
 
 class Disciplina:

@@ -3,8 +3,8 @@ import unittest
 import time
 from pathlib import Path
 
-from lns_fix_and_optimize import Vizinhanca
-from main_fix_and_optimize import (
+from alocador_salas.optimization.lns_fix_and_optimize import Vizinhanca
+from alocador_salas.optimization.main_fix_and_optimize import (
     executar_fix_and_optimize_cursos,
     executar_passada_por_cursos,
     parametros_primeira_solucao,

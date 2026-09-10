@@ -9,9 +9,9 @@ from io import BytesIO, StringIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from classes.Disciplina import Disciplina
-from classes.Horario import Horario
-from verifica_solucao import VerificaSolucao
+from alocador_salas.domain.disciplina import Disciplina
+from alocador_salas.domain.horario import Horario
+from alocador_salas.validation.verifica_solucao import VerificaSolucao
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.simplefilter("ignore", DeprecationWarning)
@@ -142,7 +142,7 @@ class TestDisciplina(unittest.TestCase):
 class TestDadosBasicos(unittest.TestCase):
     @unittest.skipUnless(TEM_PANDAS, "pandas nao esta instalado")
     def test_extrai_salas_do_csv_por_bloco_com_capacidade(self):
-        from extrai_salas import ExtraiSalas
+        from alocador_salas.data.extrai_salas import ExtraiSalas
 
         with tempfile.TemporaryDirectory() as temp_dir:
             arquivo = Path(temp_dir) / "salas.csv"
@@ -163,7 +163,7 @@ class TestDadosBasicos(unittest.TestCase):
 
     @unittest.skipUnless(TEM_PANDAS, "pandas nao esta instalado")
     def test_matriz_distancia_e_quadrada_simetrica_e_com_diagonal_zero(self):
-        from gera_matriz_distancia import GeraMatrizDistancia
+        from alocador_salas.data.gera_matriz_distancia import GeraMatrizDistancia
 
         salas = {
             "101-A": object(),
@@ -217,7 +217,7 @@ class TestExtraiHorariosAula(unittest.TestCase):
         return arquivo_horarios, arquivo_preferenciais
 
     def test_extrai_disciplinas_horarios_fases_cursos_e_preferencias(self):
-        from extrai_horarios_aula import ExtraiHorariosAula
+        from alocador_salas.data.extrai_horarios_aula import ExtraiHorariosAula
 
         with tempfile.TemporaryDirectory() as temp_dir:
             arquivo_horarios, arquivo_preferenciais = self.escreve_planilhas(temp_dir)
@@ -241,7 +241,7 @@ class TestExtraiHorariosAula(unittest.TestCase):
         self.assertIn("CC", cursos)
 
     def test_identifica_sobreposicao_de_horario_e_periodo(self):
-        from extrai_horarios_aula import ExtraiHorariosAula
+        from alocador_salas.data.extrai_horarios_aula import ExtraiHorariosAula
 
         extrator = ExtraiHorariosAula("", "")
 
@@ -308,7 +308,7 @@ class TestVerificaSolucao(unittest.TestCase):
 
 class TestResolverModelo(unittest.TestCase):
     def test_preparar_modelo_para_vizinhanca_atualiza_fixacoes_no_modelo_existente(self):
-        import solve
+        from alocador_salas.optimization import solve
 
         modelo = ModeloGurobiFake()
         x_vars = {
@@ -361,7 +361,7 @@ class TestResolverModelo(unittest.TestCase):
         self.assertEqual(modelo.atualizacoes, 1)
 
     def test_liberar_fixacoes_modelo_limpa_estado_de_modelo_reutilizado(self):
-        import solve
+        from alocador_salas.optimization import solve
 
         modelo = ModeloGurobiFake()
         x_vars = {
@@ -394,7 +394,7 @@ class TestResolverModelo(unittest.TestCase):
         self.assertEqual(modelo.atualizacoes, 1)
 
     def test_retorna_solucao_x_em_memoria_quando_ha_solucao(self):
-        import solve
+        from alocador_salas.optimization import solve
 
         class GRBFake:
             OPTIMAL = 2
@@ -446,7 +446,7 @@ class TestResolverModelo(unittest.TestCase):
 class TestGeraPlanilhaSaida(unittest.TestCase):
     def test_gera_tabela_de_alocacoes_com_aba_de_conflitos(self):
         import pandas as pd
-        from gera_planilha_saida import GeraPlanilhaSaida
+        from alocador_salas.reports.gera_planilha_saida import GeraPlanilhaSaida
 
         horarios = {"Horario_2_1": Horario(2, 1)}
         disciplinas = {"D1": cria_disciplina("D1", horarios)}
@@ -473,7 +473,7 @@ class TestGeraPlanilhaSaida(unittest.TestCase):
 
     def test_exporta_planilha_de_alocacoes_com_disciplina_alocada(self):
         import openpyxl
-        from gera_planilha_saida import GeraPlanilhaSaida
+        from alocador_salas.reports.gera_planilha_saida import GeraPlanilhaSaida
 
         horarios = {"Horario_2_1": Horario(2, 1)}
         disciplinas = {"D1": cria_disciplina("D1", horarios)}

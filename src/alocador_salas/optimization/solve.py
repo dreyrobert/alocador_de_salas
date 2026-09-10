@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from classes.Horario import Horario
-from classes.Disciplina import Disciplina
-from classes.Sala import Sala
-from extrai_salas import ExtraiSalas
-from extrai_horarios_aula import ExtraiHorariosAula
-from gera_matriz_distancia import GeraMatrizDistancia
-from gera_planilha_saida import GeraPlanilhaSaida
-from verifica_solucao import VerificaSolucao
-from lns_fix_and_optimize_compat import (
+from alocador_salas.domain.horario import Horario
+from alocador_salas.domain.disciplina import Disciplina
+from alocador_salas.domain.sala import Sala
+from alocador_salas.data.extrai_salas import ExtraiSalas
+from alocador_salas.data.extrai_horarios_aula import ExtraiHorariosAula
+from alocador_salas.data.gera_matriz_distancia import GeraMatrizDistancia
+from alocador_salas.reports.gera_planilha_saida import GeraPlanilhaSaida
+from alocador_salas.validation.verifica_solucao import VerificaSolucao
+from alocador_salas.optimization.lns_fix_and_optimize_compat import (
     aplicar_start_e_fixacao_x,
     disciplinas_da_fase,
 )
-from lns_fix_and_optimize import (
+from alocador_salas.optimization.lns_fix_and_optimize import (
     disciplinas_do_curso,
     extrair_solucao_x,
     liberar_fixacoes_x,
@@ -477,7 +477,7 @@ def _fase_livre(valor):
     return partes[0], int(partes[1])
 
 
-if __name__ == "__main__":
+def main_cli():
     parser = argparse.ArgumentParser(description="Executa o modelo de alocacao de salas.")
     parser.add_argument("--horarios", default="./dados/2024_1/horarios_2024_1.xlsx")
     parser.add_argument("--salas", default="./dados/2024_1/salas_2024_1.csv")
@@ -507,3 +507,8 @@ if __name__ == "__main__":
         curso_livre=args.liberar_curso or None,
     )
     print("RESULTADO_JSON=" + json.dumps(resultado, ensure_ascii=False, sort_keys=True))
+    return resultado
+
+
+if __name__ == "__main__":
+    main_cli()

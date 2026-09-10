@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from solve import (
+from alocador_salas.optimization.solve import (
     InstanciaAlocacao,
     carregar_instancia,
     construir_modelo,
@@ -14,7 +14,7 @@ from solve import (
     preparar_modelo_para_vizinhanca,
     resolver_modelo,
 )
-from lns_fix_and_optimize import (
+from alocador_salas.optimization.lns_fix_and_optimize import (
     SolucaoX,
     Vizinhanca,
     cursos_da_instancia,

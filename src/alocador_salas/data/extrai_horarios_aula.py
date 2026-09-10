@@ -1,8 +1,8 @@
 import pandas as pd
 import re
-from classes.Disciplina import Disciplina
-from classes.Fase import Fase
-from classes.Horario import Horario
+from alocador_salas.domain.disciplina import Disciplina
+from alocador_salas.domain.fase import Fase
+from alocador_salas.domain.horario import Horario
 from datetime import datetime
 
 class ExtraiHorariosAula:
@@ -257,4 +257,3 @@ class ExtraiHorariosAula:
         print("Agrupamentos: ",agrupados)
         return disciplinas,horarios_fixos,fases,todos_cursos
        
-

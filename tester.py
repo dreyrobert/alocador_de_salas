@@ -1,4 +1,4 @@
-from solve import main
+from alocador_salas.optimization.solve import main
 
 horarios="./dados/exemplos/horarios_teste.xlsx"
 salas="./dados/2024_1/salas_2024_1.csv"

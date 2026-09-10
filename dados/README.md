@@ -4,8 +4,8 @@ Esta pasta guarda os arquivos de entrada usados pelo modelo e pelos scripts.
 
 ## `2024_1/`
 
-Dados padrao usados atualmente por `solve.py`, `main_fix_and_optimize.py` e
-scripts de experimento.
+Dados padrao usados atualmente por `alocador_salas.optimization.solve`,
+`alocador_salas.optimization.main_fix_and_optimize` e scripts de experimento.
 
 ## `historico/`
 

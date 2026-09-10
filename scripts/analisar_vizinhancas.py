@@ -10,9 +10,9 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from extrai_horarios_aula import ExtraiHorariosAula
-from extrai_salas import ExtraiSalas
-from gera_matriz_distancia import GeraMatrizDistancia
+from alocador_salas.data.extrai_horarios_aula import ExtraiHorariosAula
+from alocador_salas.data.extrai_salas import ExtraiSalas
+from alocador_salas.data.gera_matriz_distancia import GeraMatrizDistancia
 
 
 PESO_SALA_NAO_PREFERENCIAL = 150
