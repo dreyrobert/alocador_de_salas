@@ -479,9 +479,9 @@ def _fase_livre(valor):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Executa o modelo de alocacao de salas.")
-    parser.add_argument("--horarios", default="./dados/horarios_2024_1.xlsx")
-    parser.add_argument("--salas", default="./dados/salas_2024_1.csv")
-    parser.add_argument("--preferenciais", default="./dados/salas_preferenciais_2024.1.xlsx")
+    parser.add_argument("--horarios", default="./dados/2024_1/horarios_2024_1.xlsx")
+    parser.add_argument("--salas", default="./dados/2024_1/salas_2024_1.csv")
+    parser.add_argument("--preferenciais", default="./dados/2024_1/salas_preferenciais_2024.1.xlsx")
     parser.add_argument("--remover", default="", help="Restricoes a remover, separadas por virgula. Ex.: c5,c6")
     parser.add_argument("--parametros", default="{}", help='Parametros Gurobi em JSON. Ex.: {"TimeLimit": 300}')
     parser.add_argument("--sem-planilhas", action="store_true")

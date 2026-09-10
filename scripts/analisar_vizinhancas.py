@@ -427,10 +427,10 @@ def main():
     parser = argparse.ArgumentParser(
         description="Gera planilha diagnostica para vizinhancas LNS sobre uma solucao salva."
     )
-    parser.add_argument("--horarios", default="./dados/horarios_2024_1.xlsx")
-    parser.add_argument("--salas", default="./dados/salas_2024_1.csv")
-    parser.add_argument("--preferenciais", default="./dados/salas_preferenciais_2024.1.xlsx")
-    parser.add_argument("--solucao", default="./solution.sol")
+    parser.add_argument("--horarios", default="./dados/2024_1/horarios_2024_1.xlsx")
+    parser.add_argument("--salas", default="./dados/2024_1/salas_2024_1.csv")
+    parser.add_argument("--preferenciais", default="./dados/2024_1/salas_preferenciais_2024.1.xlsx")
+    parser.add_argument("--solucao", default="./resultados/fix_and_optimize/solution.sol")
     parser.add_argument(
         "--saida", default="./resultados/diagnosticos/vizinhancas_metricas_2024_1.xlsx"
     )

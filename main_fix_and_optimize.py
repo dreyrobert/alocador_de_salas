@@ -24,9 +24,9 @@ from lns_fix_and_optimize import (
     vizinhanca_por_curso,
 )
 
-ARQUIVO_HORARIOS_PADRAO = "./dados/horarios_2024_1.xlsx"
-ARQUIVO_SALAS_PADRAO = "./dados/salas_2024_1.csv"
-ARQUIVO_PREFERENCIAIS_PADRAO = "./dados/salas_preferenciais_2024.1.xlsx"
+ARQUIVO_HORARIOS_PADRAO = "./dados/2024_1/horarios_2024_1.xlsx"
+ARQUIVO_SALAS_PADRAO = "./dados/2024_1/salas_2024_1.csv"
+ARQUIVO_PREFERENCIAIS_PADRAO = "./dados/2024_1/salas_preferenciais_2024.1.xlsx"
 PASTA_FIX_AND_OPTIMIZE_PADRAO = "./resultados/fix_and_optimize"
 ARQUIVO_MELHOR_SOLUCAO_PADRAO = f"{PASTA_FIX_AND_OPTIMIZE_PADRAO}/melhor_solucao_fix_and_optimize.sol"
 ARQUIVO_HISTORICO_CSV_PADRAO = f"{PASTA_FIX_AND_OPTIMIZE_PADRAO}/historico_fix_and_optimize.csv"

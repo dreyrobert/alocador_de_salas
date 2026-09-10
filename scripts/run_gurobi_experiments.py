@@ -55,9 +55,9 @@ def cenarios(time_limit, no_rel_heur_time):
 
 def main_cli():
     parser = argparse.ArgumentParser(description="Roda experimentos Gurobi para comparar solucoes iniciais.")
-    parser.add_argument("--horarios", default="./dados/horarios_2024_1.xlsx")
-    parser.add_argument("--salas", default="./dados/salas_2024_1.csv")
-    parser.add_argument("--preferenciais", default="./dados/salas_preferenciais_2024.1.xlsx")
+    parser.add_argument("--horarios", default="./dados/2024_1/horarios_2024_1.xlsx")
+    parser.add_argument("--salas", default="./dados/2024_1/salas_2024_1.csv")
+    parser.add_argument("--preferenciais", default="./dados/2024_1/salas_preferenciais_2024.1.xlsx")
     parser.add_argument("--time-limit", type=float, default=300)
     parser.add_argument("--no-rel-heur-time", type=float, default=300)
     parser.add_argument("--saida", default="")

@@ -9,6 +9,7 @@ temporarios e experimentos.
 Saidas padrao de `main_fix_and_optimize.py`.
 
 - `melhor_solucao_fix_and_optimize.sol`: melhor solucao encontrada pela rotina.
+- `solution.sol`: solucao historica que antes ficava na raiz do projeto.
 - `historico_fix_and_optimize.csv` e `historico_fix_and_optimize.json`:
   historico das tentativas por curso.
 

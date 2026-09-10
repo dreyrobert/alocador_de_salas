@@ -16,7 +16,7 @@ Essa aplicação utiliza de um modelo matemático e de Programação Linear Inte
 
 #  Requisitos
 
-*  Python >= 3.8
+*  Python >= 3.10 e < 3.11
 
   
 
@@ -26,6 +26,10 @@ Uma vez que os requisitos estão devidamente atendidos, podemos partir para a in
 
   
 
+`uv sync`
+
+Alternativamente, instale as dependencias com:
+
 `pip3 install -r requirements.txt`
 
   
@@ -34,9 +38,18 @@ Com as dependências instaladas podemos partir para a configuração da aplicaç
 
   
 
--  Copie o arquivo `.env copy`, o renomeie para `.env` e preencha os campos presentes no arquivo
+-  Copie o arquivo `.env.example`, o renomeie para `.env` e preencha os campos presentes no arquivo
 
 -  Também é necessário configurar o Gurobi, para informações mais detalhadas sobre sua instalação, configuração e licenças de uso acesse: https://support.gurobi.com/hc/en-us/articles/14799677517585-Getting-Started-with-Gurobi-Optimizer.
+
+#  Estrutura de pastas
+
+-  `dados/2024_1/`: dados de entrada padrao usados pelos scripts atuais.
+-  `dados/historico/`: dados e solucoes de semestres anteriores.
+-  `dados/exemplos/`: arquivos pequenos usados para testes manuais.
+-  `resultados/`: saidas geradas por execucoes, experimentos e diagnosticos.
+-  `docs/notes/`: notas tecnicas e registros de analise.
+-  `web/static/dados/`: arquivos usados ou gerados pela interface web.
 
   
 
