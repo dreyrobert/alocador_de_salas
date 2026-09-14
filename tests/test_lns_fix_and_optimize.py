@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from alocador_salas.domain.horario import Horario
 from alocador_salas.optimization.lns_fix_and_optimize_compat import (
     aplicar_start_e_fixacao_x,
     disciplinas_da_fase,
@@ -9,6 +10,7 @@ from alocador_salas.optimization.lns_fix_and_optimize_compat import (
 from alocador_salas.optimization.lns_fix_and_optimize import (
     aplicar_start_x,
     cursos_da_instancia,
+    disciplinas_do_dia_turno,
     disciplinas_do_curso,
     extrair_solucao_x,
     fixar_fora_da_vizinhanca_x,
@@ -20,13 +22,22 @@ from alocador_salas.optimization.lns_fix_and_optimize import (
     salvar_solucao_x,
     solucao_melhorou,
     vizinhanca_por_curso,
+    vizinhanca_por_dia_turno,
+    vizinhancas_por_dia_turno,
 )
 
 
 class DisciplinaFake:
-    def __init__(self, curso, fase):
+    def __init__(self, curso, fase, horarios=None, horarios_agrupados=None):
         self.curso = curso
         self.fase = fase
+        self.horarios = horarios or {}
+        self._horarios_agrupados = horarios_agrupados
+
+    def horarios_agrupamento(self):
+        if self._horarios_agrupados is not None:
+            return self._horarios_agrupados
+        return self.horarios
 
 
 class VarFake:
@@ -111,6 +122,103 @@ class TestLnsFixAndOptimize(unittest.TestCase):
         self.assertEqual(vizinhanca.tipo, "curso")
         self.assertEqual(vizinhanca.recurso, "CC")
         self.assertEqual(vizinhanca.disciplinas_liberadas, frozenset({"D1", "D2"}))
+
+    def test_seleciona_disciplinas_com_aula_no_mesmo_dia_e_turno(self):
+        disciplinas = {
+            "D1": DisciplinaFake(
+                "CC",
+                1,
+                {
+                    "Horario_2_1": Horario(2, 1),
+                    "Horario_4_13": Horario(4, 13),
+                },
+            ),
+            "D2": DisciplinaFake("ADM", 3, {"Horario_2_6": Horario(2, 6)}),
+            "D3": DisciplinaFake("MAT", 1, {"Horario_2_7": Horario(2, 7)}),
+            "D4": DisciplinaFake("MED", 2, {"Horario_3_1": Horario(3, 1)}),
+        }
+
+        self.assertEqual(
+            disciplinas_do_dia_turno(disciplinas, 2, "M"),
+            {"D1", "D2"},
+        )
+        self.assertEqual(disciplinas_do_dia_turno(disciplinas, 4, "N"), {"D1"})
+
+    def test_seletor_considera_horarios_de_disciplinas_agrupadas(self):
+        disciplina = DisciplinaFake(
+            "CC",
+            1,
+            horarios={"Horario_2_1": Horario(2, 1)},
+            horarios_agrupados={
+                "Horario_2_1": Horario(2, 1),
+                "Horario_5_8": Horario(5, 8),
+            },
+        )
+
+        selecionadas = disciplinas_do_dia_turno({"D1": disciplina}, 5, "T")
+
+        self.assertEqual(selecionadas, {"D1"})
+
+    def test_vizinhanca_por_dia_turno_libera_disciplinas_inteiras(self):
+        disciplinas = {
+            "D1": DisciplinaFake(
+                "CC",
+                1,
+                {
+                    "Horario_2_1": Horario(2, 1),
+                    "Horario_4_13": Horario(4, 13),
+                },
+            ),
+            "D2": DisciplinaFake("ADM", 1, {"Horario_3_1": Horario(3, 1)}),
+        }
+
+        vizinhanca = vizinhanca_por_dia_turno(disciplinas, 2, "M")
+
+        self.assertEqual(vizinhanca.tipo, "dia_turno")
+        self.assertEqual(vizinhanca.recurso, "2_M")
+        self.assertEqual(vizinhanca.disciplinas_liberadas, frozenset({"D1"}))
+
+    def test_seletor_rejeita_dia_e_turno_invalidos(self):
+        with self.assertRaisesRegex(ValueError, "Dia de horario invalido"):
+            disciplinas_do_dia_turno({}, 1, "M")
+        with self.assertRaisesRegex(ValueError, "Turno invalido"):
+            disciplinas_do_dia_turno({}, 2, "V")
+
+    def test_gera_apenas_vizinhancas_dia_turno_existentes_em_ordem(self):
+        disciplinas = {
+            "D1": DisciplinaFake(
+                "CC",
+                1,
+                {
+                    "Horario_2_1": Horario(2, 1),
+                    "Horario_4_13": Horario(4, 13),
+                },
+            ),
+            "D2": DisciplinaFake("ADM", 1, {"Horario_2_8": Horario(2, 8)}),
+            "D3": DisciplinaFake("MAT", 1, {"Horario_3_6": Horario(3, 6)}),
+        }
+
+        vizinhancas = vizinhancas_por_dia_turno(disciplinas)
+
+        self.assertEqual(
+            [vizinhanca.recurso for vizinhanca in vizinhancas],
+            ["2_M", "2_T", "3_M", "4_N"],
+        )
+        self.assertEqual(
+            [vizinhanca.disciplinas_liberadas for vizinhanca in vizinhancas],
+            [
+                frozenset({"D1"}),
+                frozenset({"D2"}),
+                frozenset({"D3"}),
+                frozenset({"D1"}),
+            ],
+        )
+        self.assertTrue(
+            all(vizinhanca.tipo == "dia_turno" for vizinhanca in vizinhancas)
+        )
+
+    def test_nao_gera_vizinhancas_dia_turno_para_instancia_vazia(self):
+        self.assertEqual(vizinhancas_por_dia_turno({}), [])
 
     def test_aplica_start_e_fixa_variaveis_fora_da_vizinhanca(self):
         x_vars = {

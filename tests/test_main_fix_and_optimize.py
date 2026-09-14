@@ -3,10 +3,13 @@ import unittest
 import time
 from pathlib import Path
 
+from alocador_salas.domain.horario import Horario
 from alocador_salas.optimization.lns_fix_and_optimize import Vizinhanca
 from alocador_salas.optimization.main_fix_and_optimize import (
+    executar_fix_and_optimize,
     executar_fix_and_optimize_cursos,
     executar_passada_por_cursos,
+    executar_passada_por_dia_turno,
     parametros_primeira_solucao,
     parametros_subproblema,
     reotimizar_vizinhanca,
@@ -36,7 +39,18 @@ class DisciplinaFake:
         return self.alunos
 
     def horarios_agrupamento(self):
-        return {horario: object() for horario in self._horarios}
+        return {
+            horario: (
+                valor
+                if isinstance(valor, Horario)
+                else object()
+            )
+            for horario, valor in (
+                self._horarios.items()
+                if isinstance(self._horarios, dict)
+                else ((horario, None) for horario in self._horarios)
+            )
+        }
 
 
 class TestMainFixAndOptimize(unittest.TestCase):
@@ -197,6 +211,58 @@ class TestMainFixAndOptimize(unittest.TestCase):
 
             self.assertTrue((pasta_candidatos / "candidato_curso_CC.sol").exists())
 
+    def test_executar_passada_por_dia_turno_usa_executor_generico(self):
+        disciplinas = {
+            "D1": DisciplinaFake(
+                "CC",
+                1,
+                30,
+                {
+                    "Horario_2_1": Horario(2, 1),
+                    "Horario_4_13": Horario(4, 13),
+                },
+            ),
+            "D2": DisciplinaFake(
+                "ADM",
+                1,
+                30,
+                {"Horario_2_8": Horario(2, 8)},
+            ),
+        }
+        instancia = InstanciaFake(disciplinas)
+        chamadas = []
+
+        def resolver_fake(modelo, parametros_gurobi=None, arquivo_solucao=None):
+            chamadas.append(arquivo_solucao)
+            return {
+                "status_nome": "OPTIMAL",
+                "solucoes": 1,
+                "objetivo": 200.0,
+                "arquivo_solucao": arquivo_solucao,
+                "solucao_x": {("D1", "101-A", "Horario_2_1"): 1},
+                "lns": {"variaveis_x_livres": 5, "variaveis_x_fixadas": 95},
+            }
+
+        _, historico = executar_passada_por_dia_turno(
+            solucao_incumbente_x={("D1", "101-A", "Horario_2_1"): 1},
+            instancia=instancia,
+            modelo_alocacao="modelo",
+            tempo_subproblema=10,
+            objetivo_incumbente_inicial=200.0,
+            preparar_modelo=lambda modelo, **kwargs: None,
+            resolver=resolver_fake,
+        )
+
+        self.assertEqual(
+            [(registro["dia"], registro["turno"]) for registro in historico],
+            [(2, "M"), (2, "T"), (4, "N")],
+        )
+        self.assertEqual(
+            [registro["recurso"] for registro in historico],
+            ["2_M", "2_T", "4_N"],
+        )
+        self.assertEqual(chamadas, [None, None, None])
+
     def test_executar_passada_por_cursos_exige_solucao_x_para_aceitar_melhoria(self):
         disciplinas = {
             "D1": DisciplinaFake("CC", 1, 30, ["Horario_2_1"]),
@@ -337,6 +403,105 @@ class TestMainFixAndOptimize(unittest.TestCase):
             self.assertEqual(len(chamadas_construir), 1)
             self.assertEqual([chamada[0] for chamada in chamadas_preparar], ["modelo", "modelo"])
             self.assertEqual(chamadas_liberar, ["modelo"])
+
+    def test_executar_fix_and_optimize_hibrido_alterna_ao_estagnar(self):
+        disciplinas = {
+            "D1": DisciplinaFake(
+                "CC",
+                1,
+                30,
+                {"Horario_2_1": Horario(2, 1)},
+            ),
+        }
+        instancia = InstanciaFake(disciplinas)
+        instancia.cursos = {"CC": object()}
+        objetivos = iter([300.0, 300.0, 250.0, 250.0, 250.0])
+
+        def resolver_fake(modelo, parametros_gurobi=None, arquivo_solucao=None):
+            objetivo = next(objetivos)
+            return {
+                "status_nome": "OPTIMAL",
+                "solucoes": 1,
+                "objetivo": objetivo,
+                "arquivo_solucao": arquivo_solucao,
+                "solucao_x": {("D1", "101-A", "Horario_2_1"): 1},
+                "lns": {"variaveis_x_livres": 5, "variaveis_x_fixadas": 95},
+            }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            resultado = executar_fix_and_optimize(
+                tipo_vizinhanca="hibrida",
+                arquivo_melhor_solucao=str(Path(temp_dir) / "melhor.sol"),
+                arquivo_log_csv="",
+                arquivo_log_json="",
+                carregar=lambda *args: instancia,
+                construir=lambda inst, **kwargs: "modelo",
+                preparar_modelo=lambda modelo, **kwargs: None,
+                liberar_modelo=lambda modelo: None,
+                resolver=resolver_fake,
+            )
+
+        self.assertEqual(
+            [registro["vizinhanca"] for registro in resultado["historico"]],
+            ["curso", "dia_turno", "curso", "dia_turno"],
+        )
+        self.assertEqual(
+            [registro["ciclo"] for registro in resultado["historico"]],
+            [1, 1, 2, 2],
+        )
+        self.assertEqual(resultado["objetivo_final"], 250.0)
+        self.assertEqual(resultado["melhorias_aceitas"], 1)
+        self.assertEqual(resultado["passadas_executadas"], 4)
+        self.assertEqual(resultado["tipo_vizinhanca"], "hibrida")
+
+    def test_executar_fix_and_optimize_pode_usar_somente_dia_turno(self):
+        disciplinas = {
+            "D1": DisciplinaFake(
+                "CC",
+                1,
+                30,
+                {"Horario_2_1": Horario(2, 1)},
+            ),
+        }
+        instancia = InstanciaFake(disciplinas)
+        objetivos = iter([300.0, 290.0, 290.0])
+
+        def resolver_fake(modelo, parametros_gurobi=None, arquivo_solucao=None):
+            objetivo = next(objetivos)
+            return {
+                "status_nome": "OPTIMAL",
+                "solucoes": 1,
+                "objetivo": objetivo,
+                "arquivo_solucao": arquivo_solucao,
+                "solucao_x": {("D1", "101-A", "Horario_2_1"): 1},
+                "lns": None,
+            }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            resultado = executar_fix_and_optimize(
+                tipo_vizinhanca="dia_turno",
+                arquivo_melhor_solucao=str(Path(temp_dir) / "melhor.sol"),
+                arquivo_log_csv="",
+                arquivo_log_json="",
+                carregar=lambda *args: instancia,
+                construir=lambda inst, **kwargs: "modelo",
+                preparar_modelo=lambda modelo, **kwargs: None,
+                liberar_modelo=lambda modelo: None,
+                resolver=resolver_fake,
+            )
+
+        self.assertEqual(resultado["etapa"], "fix_and_optimize_dia_turno")
+        self.assertEqual(resultado["objetivo_final"], 290.0)
+        self.assertTrue(
+            all(
+                registro["vizinhanca"] == "dia_turno"
+                for registro in resultado["historico"]
+            )
+        )
+
+    def test_executar_fix_and_optimize_rejeita_tipo_desconhecido(self):
+        with self.assertRaisesRegex(ValueError, "Tipo de vizinhanca invalido"):
+            executar_fix_and_optimize(tipo_vizinhanca="desconhecida")
 
     def test_executar_fix_and_optimize_cursos_retorna_sem_solucao_inicial(self):
         instancia = InstanciaFake({})

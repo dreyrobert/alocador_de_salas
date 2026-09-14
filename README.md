@@ -70,3 +70,15 @@ Para rodar o modelo PLI diretamente:
 Para rodar a heuristica Fix-and-Optimize:
 
 `uv run alocador-salas-fixopt`
+
+Por padrao, a heuristica usa vizinhancas por curso. O tipo pode ser escolhido
+pela linha de comando:
+
+```bash
+uv run alocador-salas-fixopt --tipo-vizinhanca curso
+uv run alocador-salas-fixopt --tipo-vizinhanca dia_turno
+uv run alocador-salas-fixopt --tipo-vizinhanca hibrida
+```
+
+No modo hibrido, a busca explora cursos ate uma passada sem melhoria, tenta as
+vizinhancas por dia e turno e volta aos cursos se encontrar uma nova incumbente.

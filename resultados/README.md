@@ -11,16 +11,16 @@ Saidas padrao de `alocador_salas.optimization.main_fix_and_optimize`.
 - `melhor_solucao_fix_and_optimize.sol`: melhor solucao encontrada pela rotina.
 - `solution.sol`: solucao historica que antes ficava na raiz do projeto.
 - `historico_fix_and_optimize.csv` e `historico_fix_and_optimize.json`:
-  historico das tentativas por curso.
+  historico das tentativas, incluindo ciclo, tipo e recurso da vizinhanca.
 
 ## `fix_and_optimize/candidatos/`
 
-Arquivos `.sol` candidatos gerados durante uma passada por cursos.
+Arquivos `.sol` candidatos gerados durante uma passada.
 
-Cada arquivo `candidato_curso_<CURSO>.sol` e a solucao produzida ao liberar
-temporariamente as disciplinas daquele curso e fixar as demais. Se o objetivo
-melhorar, esse candidato e copiado para a melhor solucao; se nao melhorar, ele
-fica apenas como registro/debug da tentativa.
+Os arquivos seguem o formato `candidato_<TIPO>_<RECURSO>.sol`, por exemplo
+`candidato_curso_CC.sol` ou `candidato_dia_turno_2_M.sol`. Cada um e a solucao
+produzida ao liberar temporariamente as disciplinas da vizinhanca e fixar as
+demais.
 
 Por padrao, a rotina mantem esses candidatos apenas em memoria e salva somente
 a melhor solucao final. Use `--salvar-candidatos` para gerar estes arquivos de

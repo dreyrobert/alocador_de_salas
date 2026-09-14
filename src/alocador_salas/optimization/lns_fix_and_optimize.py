@@ -13,6 +13,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from alocador_salas.domain.horario import (
+    DIAS_VALIDOS,
+    TURNOS_VALIDOS,
+    Turno,
+    turno_da_faixa,
+)
+
 
 XKey = tuple[str, str, str]
 SolucaoX = dict[XKey, int]
@@ -108,6 +115,60 @@ def vizinhanca_por_curso(disciplinas, curso: str) -> Vizinhanca:
         disciplinas_liberadas=frozenset(liberadas),
         justificativa="Libera um curso inteiro para movimentos estruturais maiores.",
     )
+
+
+def disciplinas_do_dia_turno(
+    disciplinas,
+    dia: int,
+    turno: Turno,
+) -> set[str]:
+    """Seleciona disciplinas com ao menos uma aula no dia e turno informados."""
+    if dia not in DIAS_VALIDOS:
+        raise ValueError(f"Dia de horario invalido: {dia}. Esperado valor entre 2 e 7.")
+    if turno not in TURNOS_VALIDOS:
+        raise ValueError(
+            f"Turno invalido: {turno}. Esperado um dos valores {TURNOS_VALIDOS}."
+        )
+
+    selecionadas: set[str] = set()
+    for codigo, disciplina in disciplinas.items():
+        horarios = disciplina.horarios_agrupamento()
+        if any(
+            horario.dia == dia and turno_da_faixa(horario.faixa) == turno
+            for horario in horarios.values()
+        ):
+            selecionadas.add(codigo)
+
+    return selecionadas
+
+
+def vizinhanca_por_dia_turno(
+    disciplinas,
+    dia: int,
+    turno: Turno,
+) -> Vizinhanca:
+    liberadas = disciplinas_do_dia_turno(disciplinas, dia, turno)
+    return Vizinhanca(
+        tipo="dia_turno",
+        recurso=f"{dia}_{turno}",
+        disciplinas_liberadas=frozenset(liberadas),
+        justificativa=(
+            "Libera disciplinas inteiras que possuem ao menos uma aula "
+            "no dia e turno selecionados."
+        ),
+    )
+
+
+def vizinhancas_por_dia_turno(disciplinas) -> list[Vizinhanca]:
+    """Gera as vizinhancas nao vazias de dia/turno em ordem deterministica."""
+    vizinhancas: list[Vizinhanca] = []
+    for dia in sorted(DIAS_VALIDOS):
+        for turno in TURNOS_VALIDOS:
+            vizinhanca = vizinhanca_por_dia_turno(disciplinas, dia, turno)
+            if vizinhanca.disciplinas_liberadas:
+                vizinhancas.append(vizinhanca)
+
+    return vizinhancas
 
 
 def aplicar_start_x(x_vars, solucao_x: SolucaoX) -> dict[str, int]:

@@ -22,6 +22,7 @@ from alocador_salas.optimization.lns_fix_and_optimize import (
     salvar_solucao_x,
     solucao_melhorou,
     vizinhanca_por_curso,
+    vizinhancas_por_dia_turno,
 )
 
 ARQUIVO_HORARIOS_PADRAO = "./dados/2024_1/horarios_2024_1.xlsx"
@@ -85,21 +86,21 @@ def reotimizar_vizinhanca(
     return resultado
 
 
-def executar_passada_por_cursos(
+def executar_passada_por_vizinhancas(
     solucao_incumbente_x: SolucaoX,
-    instancia: InstanciaAlocacao,
     modelo_alocacao,
-    cursos: list[str] | None = None,
+    vizinhancas: list[Vizinhanca],
     pasta_candidatos: str | Path = PASTA_CANDIDATOS_PADRAO,
     tempo_subproblema: float = 60,
     numero_passada: int = 1,
+    numero_ciclo: int = 1,
     objetivo_incumbente_inicial: float | None = None,
     preparar_modelo: Callable = preparar_modelo_para_vizinhanca,
     resolver: Callable = resolver_modelo,
     tempo_fim_total: float | None = None,
     salvar_candidatos: bool = False,
 ) -> tuple[dict, list[dict]]:
-    """Executa uma passada completa de fix-and-optimize sobre a lista de cursos."""
+    """Executa uma passada de fix-and-optimize sobre vizinhancas genericas."""
     solucao_x_atual = solucao_incumbente_x
     incumbente_atual = {
         "solucoes": 1 if objetivo_incumbente_inicial is not None else 0,
@@ -108,15 +109,15 @@ def executar_passada_por_cursos(
         "solucao_x": solucao_x_atual,
     }
 
-    if cursos is None:
-        cursos = cursos_da_instancia(instancia)
-
     pasta_cand = Path(pasta_candidatos)
     if salvar_candidatos:
         pasta_cand.mkdir(parents=True, exist_ok=True)
     historico_passada: list[dict] = []
 
-    for idx, curso in enumerate(cursos, start=1):
+    for idx, vizinhanca in enumerate(vizinhancas, start=1):
+        if not vizinhanca.disciplinas_liberadas:
+            continue
+
         tempo_subproblema_efetivo = tempo_subproblema
         if tempo_fim_total is not None:
             tempo_restante = tempo_fim_total - time.time()
@@ -124,15 +125,14 @@ def executar_passada_por_cursos(
                 break
             tempo_subproblema_efetivo = min(tempo_subproblema, tempo_restante)
 
-        arquivo_candidato = pasta_cand / f"candidato_curso_{curso}.sol"
+        arquivo_candidato = (
+            pasta_cand
+            / f"candidato_{vizinhanca.tipo}_{vizinhanca.recurso}.sol"
+        )
         arquivo_candidato_str = str(arquivo_candidato) if salvar_candidatos else None
         t0 = time.time()
 
         obj_anterior = incumbente_atual.get("objetivo")
-        vizinhanca = vizinhanca_por_curso(instancia.disciplinas, curso)
-        if not vizinhanca.disciplinas_liberadas:
-            continue
-
         resultado_candidato = reotimizar_vizinhanca(
             modelo_alocacao=modelo_alocacao,
             solucao_incumbente_x=solucao_x_atual,
@@ -142,7 +142,6 @@ def executar_passada_por_cursos(
             preparar_modelo=preparar_modelo,
             resolver=resolver,
         )
-        resultado_candidato["curso_livre"] = curso
         tempo_gasto = time.time() - t0
 
         melhorou = solucao_melhorou(incumbente_atual, resultado_candidato)
@@ -157,10 +156,11 @@ def executar_passada_por_cursos(
 
         lns_info = resultado_candidato.get("lns") or {}
         registro = {
+            "ciclo": numero_ciclo,
             "passada": numero_passada,
             "iteracao": idx,
-            "vizinhanca": "curso",
-            "curso": curso,
+            "vizinhanca": vizinhanca.tipo,
+            "recurso": vizinhanca.recurso,
             "disciplinas_livres": resultado_candidato.get("disciplinas_livres_qtd", 0),
             "variaveis_x_livres": lns_info.get("variaveis_x_livres", 0),
             "variaveis_x_fixadas": lns_info.get("variaveis_x_fixadas", 0),
@@ -172,12 +172,88 @@ def executar_passada_por_cursos(
             "tempo_gasto_s": round(tempo_gasto, 2),
             "tempo_limite_subproblema_s": round(tempo_subproblema_efetivo, 2),
         }
+        if vizinhanca.tipo == "curso":
+            resultado_candidato["curso_livre"] = vizinhanca.recurso
+            registro["curso"] = vizinhanca.recurso
+        elif vizinhanca.tipo == "dia_turno":
+            dia, turno = vizinhanca.recurso.split("_", maxsplit=1)
+            registro["dia"] = int(dia)
+            registro["turno"] = turno
         historico_passada.append(registro)
 
     return incumbente_atual, historico_passada
 
 
-def executar_fix_and_optimize_cursos(
+def executar_passada_por_cursos(
+    solucao_incumbente_x: SolucaoX,
+    instancia: InstanciaAlocacao,
+    modelo_alocacao,
+    cursos: list[str] | None = None,
+    pasta_candidatos: str | Path = PASTA_CANDIDATOS_PADRAO,
+    tempo_subproblema: float = 60,
+    numero_passada: int = 1,
+    numero_ciclo: int = 1,
+    objetivo_incumbente_inicial: float | None = None,
+    preparar_modelo: Callable = preparar_modelo_para_vizinhanca,
+    resolver: Callable = resolver_modelo,
+    tempo_fim_total: float | None = None,
+    salvar_candidatos: bool = False,
+) -> tuple[dict, list[dict]]:
+    """Executa uma passada usando vizinhancas formadas por curso."""
+    if cursos is None:
+        cursos = cursos_da_instancia(instancia)
+    vizinhancas = [
+        vizinhanca_por_curso(instancia.disciplinas, curso)
+        for curso in cursos
+    ]
+    return executar_passada_por_vizinhancas(
+        solucao_incumbente_x=solucao_incumbente_x,
+        modelo_alocacao=modelo_alocacao,
+        vizinhancas=vizinhancas,
+        pasta_candidatos=pasta_candidatos,
+        tempo_subproblema=tempo_subproblema,
+        numero_passada=numero_passada,
+        numero_ciclo=numero_ciclo,
+        objetivo_incumbente_inicial=objetivo_incumbente_inicial,
+        preparar_modelo=preparar_modelo,
+        resolver=resolver,
+        tempo_fim_total=tempo_fim_total,
+        salvar_candidatos=salvar_candidatos,
+    )
+
+
+def executar_passada_por_dia_turno(
+    solucao_incumbente_x: SolucaoX,
+    instancia: InstanciaAlocacao,
+    modelo_alocacao,
+    pasta_candidatos: str | Path = PASTA_CANDIDATOS_PADRAO,
+    tempo_subproblema: float = 60,
+    numero_passada: int = 1,
+    numero_ciclo: int = 1,
+    objetivo_incumbente_inicial: float | None = None,
+    preparar_modelo: Callable = preparar_modelo_para_vizinhanca,
+    resolver: Callable = resolver_modelo,
+    tempo_fim_total: float | None = None,
+    salvar_candidatos: bool = False,
+) -> tuple[dict, list[dict]]:
+    """Executa uma passada usando as vizinhancas existentes de dia/turno."""
+    return executar_passada_por_vizinhancas(
+        solucao_incumbente_x=solucao_incumbente_x,
+        modelo_alocacao=modelo_alocacao,
+        vizinhancas=vizinhancas_por_dia_turno(instancia.disciplinas),
+        pasta_candidatos=pasta_candidatos,
+        tempo_subproblema=tempo_subproblema,
+        numero_passada=numero_passada,
+        numero_ciclo=numero_ciclo,
+        objetivo_incumbente_inicial=objetivo_incumbente_inicial,
+        preparar_modelo=preparar_modelo,
+        resolver=resolver,
+        tempo_fim_total=tempo_fim_total,
+        salvar_candidatos=salvar_candidatos,
+    )
+
+
+def executar_fix_and_optimize(
     arquivo_horarios: str = ARQUIVO_HORARIOS_PADRAO,
     arquivo_salas: str = ARQUIVO_SALAS_PADRAO,
     arquivo_salas_preferenciais: str = ARQUIVO_PREFERENCIAIS_PADRAO,
@@ -190,13 +266,21 @@ def executar_fix_and_optimize_cursos(
     tempo_total_maximo: float | None = None,
     apenas_uma_passada: bool = False,
     salvar_candidatos: bool = False,
+    tipo_vizinhanca: str = "curso",
     carregar: Callable = carregar_instancia,
     construir: Callable = construir_modelo,
     preparar_modelo: Callable = preparar_modelo_para_vizinhanca,
     liberar_modelo: Callable = liberar_fixacoes_modelo,
     resolver: Callable = resolver_modelo,
 ) -> dict:
-    """Executa a rotina completa de fix-and-optimize iterando sobre os cursos."""
+    """Executa o fix-and-optimize por curso, dia/turno ou de forma hibrida."""
+    tipos_validos = {"curso", "dia_turno", "hibrida"}
+    if tipo_vizinhanca not in tipos_validos:
+        raise ValueError(
+            f"Tipo de vizinhanca invalido: {tipo_vizinhanca}. "
+            f"Esperado um dos valores {sorted(tipos_validos)}."
+        )
+
     t_inicio_total = time.time()
     tempo_fim_total = (
         t_inicio_total + tempo_total_maximo
@@ -246,26 +330,35 @@ def executar_fix_and_optimize_cursos(
         else:
             cursos = cursos_da_instancia(instancia)
             passada = 1
+            ciclo = 1
+            tipo_passada = "curso" if tipo_vizinhanca == "hibrida" else tipo_vizinhanca
 
             while incumbente_atual.get("solucao_x") is not None:
                 if tempo_total_maximo and (time.time() - t_inicio_total) >= tempo_total_maximo:
                     break
 
-                cursos_rodada = list(cursos)
-
-                incumbente_passada, hist_passada = executar_passada_por_cursos(
-                    solucao_incumbente_x=incumbente_atual["solucao_x"],
-                    instancia=instancia,
-                    modelo_alocacao=modelo_alocacao,
-                    cursos=cursos_rodada,
-                    tempo_subproblema=tempo_subproblema,
-                    numero_passada=passada,
-                    objetivo_incumbente_inicial=incumbente_atual.get("objetivo"),
-                    preparar_modelo=preparar_modelo,
-                    resolver=resolver,
-                    tempo_fim_total=tempo_fim_total,
-                    salvar_candidatos=salvar_candidatos,
-                )
+                argumentos_passada = {
+                    "solucao_incumbente_x": incumbente_atual["solucao_x"],
+                    "instancia": instancia,
+                    "modelo_alocacao": modelo_alocacao,
+                    "tempo_subproblema": tempo_subproblema,
+                    "numero_passada": passada,
+                    "numero_ciclo": ciclo,
+                    "objetivo_incumbente_inicial": incumbente_atual.get("objetivo"),
+                    "preparar_modelo": preparar_modelo,
+                    "resolver": resolver,
+                    "tempo_fim_total": tempo_fim_total,
+                    "salvar_candidatos": salvar_candidatos,
+                }
+                if tipo_passada == "curso":
+                    incumbente_passada, hist_passada = executar_passada_por_cursos(
+                        cursos=list(cursos),
+                        **argumentos_passada,
+                    )
+                else:
+                    incumbente_passada, hist_passada = executar_passada_por_dia_turno(
+                        **argumentos_passada,
+                    )
 
                 melhorias_na_passada = sum(1 for reg in hist_passada if reg["melhorou"])
                 melhorias_totais += melhorias_na_passada
@@ -276,8 +369,16 @@ def executar_fix_and_optimize_cursos(
                 if apenas_uma_passada:
                     break
 
-                if melhorias_na_passada == 0:
-                    # Otimo local alcancado com respeito a vizinhancas unicas por curso
+                if tipo_vizinhanca == "hibrida":
+                    if tipo_passada == "curso" and melhorias_na_passada == 0:
+                        tipo_passada = "dia_turno"
+                    elif tipo_passada == "dia_turno" and melhorias_na_passada > 0:
+                        tipo_passada = "curso"
+                        ciclo += 1
+                    elif melhorias_na_passada == 0:
+                        # Otimo local em relacao aos dois tipos de vizinhanca.
+                        break
+                elif melhorias_na_passada == 0:
                     break
                 passada += 1
 
@@ -299,8 +400,14 @@ def executar_fix_and_optimize_cursos(
     tempo_total_exec = round(time.time() - t_inicio_total, 2)
     ganho_absoluto = (obj_inicial - obj_final) if (obj_inicial is not None and obj_final is not None) else 0.0
 
+    etapa = (
+        "fix_and_optimize_cursos"
+        if tipo_vizinhanca == "curso"
+        else f"fix_and_optimize_{tipo_vizinhanca}"
+    )
     return {
-        "etapa": "fix_and_optimize_cursos",
+        "etapa": etapa,
+        "tipo_vizinhanca": tipo_vizinhanca,
         "status": status_execucao,
         "objetivo_inicial": obj_inicial,
         "objetivo_final": obj_final,
@@ -316,9 +423,15 @@ def executar_fix_and_optimize_cursos(
     }
 
 
+def executar_fix_and_optimize_cursos(*args, **kwargs) -> dict:
+    """Mantem a interface historica da execucao exclusiva por cursos."""
+    kwargs["tipo_vizinhanca"] = "curso"
+    return executar_fix_and_optimize(*args, **kwargs)
+
+
 def main() -> dict:
     parser = argparse.ArgumentParser(
-        description="Executa a heuristica fix-and-optimize por cursos."
+        description="Executa a heuristica fix-and-optimize com vizinhancas configuraveis."
     )
     parser.add_argument("--horarios", default=ARQUIVO_HORARIOS_PADRAO)
     parser.add_argument("--salas", default=ARQUIVO_SALAS_PADRAO)
@@ -329,16 +442,25 @@ def main() -> dict:
     parser.add_argument("--tempo-subproblema", type=float, default=300)
     parser.add_argument("--tempo-total", type=float, default=None)
     parser.add_argument("--apenas-uma-passada", action="store_true")
+    parser.add_argument(
+        "--tipo-vizinhanca",
+        choices=["curso", "dia_turno", "hibrida"],
+        default="curso",
+        help=(
+            "Escolhe vizinhancas por curso, por dia/turno ou busca hibrida "
+            "(curso seguido de dia/turno quando houver estagnacao)."
+        ),
+    )
     parser.add_argument("--log-csv", default=ARQUIVO_HISTORICO_CSV_PADRAO)
     parser.add_argument("--log-json", default=ARQUIVO_HISTORICO_JSON_PADRAO)
     parser.add_argument(
         "--salvar-candidatos",
         action="store_true",
-        help="Salva solucoes candidatas por curso para debug. Por padrao, candidatos ficam apenas em memoria.",
+        help="Salva solucoes candidatas para debug. Por padrao, ficam apenas em memoria.",
     )
     args = parser.parse_args()
 
-    resultado = executar_fix_and_optimize_cursos(
+    resultado = executar_fix_and_optimize(
         arquivo_horarios=args.horarios,
         arquivo_salas=args.salas,
         arquivo_salas_preferenciais=args.preferenciais,
@@ -351,6 +473,7 @@ def main() -> dict:
         tempo_total_maximo=args.tempo_total,
         apenas_uma_passada=args.apenas_uma_passada,
         salvar_candidatos=args.salvar_candidatos,
+        tipo_vizinhanca=args.tipo_vizinhanca,
     )
     print("RESULTADO_JSON=" + json.dumps(resultado, ensure_ascii=False, sort_keys=True))
     return resultado

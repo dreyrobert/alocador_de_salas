@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from alocador_salas.domain.disciplina import Disciplina
-from alocador_salas.domain.horario import Horario
+from alocador_salas.domain.horario import Horario, dia_turno, turno_da_faixa
 from alocador_salas.validation.verifica_solucao import VerificaSolucao
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -81,6 +81,25 @@ class TestHorario(unittest.TestCase):
         self.assertEqual(Horario(2, 6).get_faixa_convertida(), 6)
         self.assertEqual(Horario(2, 7).get_faixa_convertida(), 1)
         self.assertEqual(Horario(2, 13).get_faixa_convertida(), 1)
+
+    def test_converte_limites_das_faixas_para_turno_canonico(self):
+        self.assertEqual(turno_da_faixa(1), "M")
+        self.assertEqual(turno_da_faixa(6), "M")
+        self.assertEqual(turno_da_faixa(7), "T")
+        self.assertEqual(turno_da_faixa(12), "T")
+        self.assertEqual(turno_da_faixa(13), "N")
+        self.assertEqual(turno_da_faixa(18), "N")
+
+    def test_cria_chave_canonica_de_dia_e_turno(self):
+        self.assertEqual(dia_turno(2, 1), (2, "M"))
+        self.assertEqual(dia_turno(4, 8), (4, "T"))
+        self.assertEqual(dia_turno(7, 18), (7, "N"))
+
+    def test_rejeita_dia_e_faixa_fora_do_dominio(self):
+        with self.assertRaisesRegex(ValueError, "Dia de horario invalido"):
+            dia_turno(1, 1)
+        with self.assertRaisesRegex(ValueError, "Faixa de horario invalida"):
+            turno_da_faixa(19)
 
 
 class TestDisciplina(unittest.TestCase):
