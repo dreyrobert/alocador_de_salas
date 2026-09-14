@@ -52,6 +52,10 @@ def parametros_subproblema(tempo_subproblema: float = 300) -> dict[str, float | 
     return {
         "TimeLimit": tempo_subproblema,
         "MIPFocus": 1,
+        # O modelo e reutilizado depois da busca da solucao inicial. Portanto,
+        # precisamos desativar explicitamente a heuristica NoRel; omitir o
+        # parametro preservaria o NoRelHeurTime configurado anteriormente.
+        "NoRelHeurTime": 0,
     }
 
 

@@ -64,12 +64,13 @@ class TestMainFixAndOptimize(unittest.TestCase):
             },
         )
 
-    def test_parametros_subproblema_usa_limite_de_300s_por_padrao(self):
+    def test_parametros_subproblema_usa_limite_padrao_e_desativa_norel(self):
         self.assertEqual(
             parametros_subproblema(),
             {
                 "TimeLimit": 300,
                 "MIPFocus": 1,
+                "NoRelHeurTime": 0,
             },
         )
 
