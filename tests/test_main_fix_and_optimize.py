@@ -139,6 +139,7 @@ class TestMainFixAndOptimize(unittest.TestCase):
                     Path(arquivo_solucao).write_text(f"# Objective value = {obj}\n", encoding="utf-8")
                 return {
                     "status_nome": "OPTIMAL",
+                    "tempo_solver_s": 7.346,
                     "solucoes": 1,
                     "objetivo": obj,
                     "arquivo_solucao": arquivo_solucao,
@@ -162,6 +163,7 @@ class TestMainFixAndOptimize(unittest.TestCase):
             self.assertEqual(len(historico), 2)
             self.assertTrue(historico[0]["melhorou"])
             self.assertEqual(historico[0]["curso"], "CC")
+            self.assertEqual(historico[0]["tempo_solver_s"], 7.35)
             self.assertFalse(historico[1]["melhorou"])
             self.assertEqual(historico[1]["curso"], "ADM")
             self.assertFalse((Path(temp_dir) / "candidatos").exists())

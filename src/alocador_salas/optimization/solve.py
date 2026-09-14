@@ -363,7 +363,11 @@ def resolver_modelo(modelo_alocacao, parametros_gurobi=None, arquivo_solucao=Non
         "objetivo": m.ObjVal if m.SolCount > 0 else None,
         "bound": m.ObjBound if m.SolCount > 0 else None,
         "gap": m.MIPGap if m.SolCount > 0 else None,
+        # `Runtime` mede apenas a chamada mais recente a `Model.optimize()`.
+        # Mantemos `tempo` por compatibilidade e expomos o nome com unidade
+        # para que o historico diferencie esse valor do tempo externo da LNS.
         "tempo": m.Runtime,
+        "tempo_solver_s": m.Runtime,
         "restricoes_removidas": sorted(modelo_alocacao.restricoes_removidas),
         "parametros_gurobi": parametros_gurobi,
         "arquivo_solucao": arquivo_solucao if m.SolCount > 0 else None,

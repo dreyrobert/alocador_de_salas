@@ -155,6 +155,10 @@ def executar_passada_por_vizinhancas(
             incumbente_atual["solucao_x"] = solucao_x_atual
 
         lns_info = resultado_candidato.get("lns") or {}
+        tempo_solver = resultado_candidato.get(
+            "tempo_solver_s",
+            resultado_candidato.get("tempo"),
+        )
         registro = {
             "ciclo": numero_ciclo,
             "passada": numero_passada,
@@ -170,6 +174,9 @@ def executar_passada_por_vizinhancas(
             "melhorou": melhorou,
             "objetivo_incumbente": incumbente_atual.get("objetivo"),
             "tempo_gasto_s": round(tempo_gasto, 2),
+            "tempo_solver_s": (
+                round(float(tempo_solver), 2) if tempo_solver is not None else None
+            ),
             "tempo_limite_subproblema_s": round(tempo_subproblema_efetivo, 2),
         }
         if vizinhanca.tipo == "curso":
