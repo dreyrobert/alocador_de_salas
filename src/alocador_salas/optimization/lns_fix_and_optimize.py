@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import csv
 import re
-from dataclasses import dataclass
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
@@ -38,6 +39,30 @@ class Vizinhanca:
     recurso: str
     disciplinas_liberadas: frozenset[str]
     justificativa: str = ""
+    metadados: dict = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class PenalidadeDisciplina:
+    disciplina: str
+    horarios_nao_alocados: int
+    alocacoes_nao_preferenciais: int
+    salas_usadas: frozenset[str]
+    score: float
+
+
+@dataclass(frozen=True)
+class IndicesAlocacao:
+    sala_por_disciplina_horario: dict[tuple[str, str], str]
+    ocupante_por_sala_horario: dict[tuple[str, str], str]
+    salas_por_disciplina: dict[str, frozenset[str]]
+
+
+PESO_MULTIPLAS_SALAS = 250
+PESO_SALA_NAO_PREFERENCIAL = 150
+PESO_NAO_ALOCADA = 2000
+PESO_DISPERSAO_FASE = 5
+PESO_DISPERSAO_CURSO = 0.5
 
 
 def parse_solucao_x(caminho_solucao: str | Path) -> SolucaoX:
@@ -169,6 +194,255 @@ def vizinhancas_por_dia_turno(disciplinas) -> list[Vizinhanca]:
                 vizinhancas.append(vizinhanca)
 
     return vizinhancas
+
+
+def indexar_alocacoes(solucao_x: SolucaoX) -> IndicesAlocacao:
+    """Cria indices compactos apenas com as atribuicoes ativas da incumbente."""
+    por_disciplina_horario: dict[tuple[str, str], str] = {}
+    por_sala_horario: dict[tuple[str, str], str] = {}
+    salas_por_disciplina: dict[str, set[str]] = defaultdict(set)
+    for (disciplina, sala, horario), valor in solucao_x.items():
+        if valor <= 0:
+            continue
+        por_disciplina_horario[(disciplina, horario)] = sala
+        por_sala_horario[(sala, horario)] = disciplina
+        salas_por_disciplina[disciplina].add(sala)
+    return IndicesAlocacao(
+        sala_por_disciplina_horario=por_disciplina_horario,
+        ocupante_por_sala_horario=por_sala_horario,
+        salas_por_disciplina={
+            disciplina: frozenset(salas)
+            for disciplina, salas in salas_por_disciplina.items()
+        },
+    )
+
+
+def _distancia_total(salas: set[str], salas_lista: list[str], matriz_dist: list) -> float:
+    indices = {sala: indice for indice, sala in enumerate(salas_lista)}
+    conhecidas = sorted((sala for sala in salas if sala in indices), key=indices.get)
+    return sum(
+        matriz_dist[indices[sala_i]][indices[sala_j]]
+        for posicao, sala_i in enumerate(conhecidas)
+        for sala_j in conhecidas[posicao + 1 :]
+    )
+
+
+def calcular_penalidades_disciplinas(instancia, solucao_x: SolucaoX) -> list[PenalidadeDisciplina]:
+    """Pontua disciplinas pela penalidade local e pela dispersao dos seus grupos."""
+    indices = indexar_alocacoes(solucao_x)
+    salas_fase: dict[tuple[str, int], set[str]] = defaultdict(set)
+    salas_curso: dict[str, set[str]] = defaultdict(set)
+    for codigo, disciplina in instancia.disciplinas.items():
+        salas = set(indices.salas_por_disciplina.get(codigo, ()))
+        salas_fase[(disciplina.curso, disciplina.fase)].update(salas)
+        salas_curso[disciplina.curso].update(salas)
+
+    resultado = []
+    for codigo, disciplina in instancia.disciplinas.items():
+        horarios = disciplina.horarios_agrupamento()
+        atribuicoes = [
+            indices.sala_por_disciplina_horario.get((codigo, horario))
+            for horario in horarios
+        ]
+        nao_alocados = sum(sala is None for sala in atribuicoes)
+        preferenciais = set(disciplina.salasPreferenciais or ())
+        nao_preferenciais = sum(
+            sala is not None and sala not in preferenciais for sala in atribuicoes
+        )
+        salas_usadas = set(indices.salas_por_disciplina.get(codigo, ()))
+        dispersao_fase = _distancia_total(
+            salas_fase[(disciplina.curso, disciplina.fase)],
+            instancia.salas_lista,
+            instancia.matriz_dist,
+        )
+        dispersao_curso = _distancia_total(
+            salas_curso[disciplina.curso],
+            instancia.salas_lista,
+            instancia.matriz_dist,
+        )
+        score = (
+            nao_alocados * PESO_NAO_ALOCADA
+            + nao_preferenciais * PESO_SALA_NAO_PREFERENCIAL
+            + max(0, len(salas_usadas) - 1) * PESO_MULTIPLAS_SALAS
+            + dispersao_fase * PESO_DISPERSAO_FASE
+            + dispersao_curso * PESO_DISPERSAO_CURSO
+        )
+        resultado.append(
+            PenalidadeDisciplina(
+                disciplina=codigo,
+                horarios_nao_alocados=nao_alocados,
+                alocacoes_nao_preferenciais=nao_preferenciais,
+                salas_usadas=frozenset(salas_usadas),
+                score=score,
+            )
+        )
+    return sorted(resultado, key=lambda item: (-item.score, item.disciplina))
+
+
+def _distancia_media_para_salas(
+    sala: str,
+    referencias: set[str],
+    salas_lista: list[str],
+    matriz_dist: list,
+) -> float:
+    if not referencias:
+        return 0.0
+    indices = {nome: indice for indice, nome in enumerate(salas_lista)}
+    if sala not in indices:
+        return float("inf")
+    distancias = [
+        matriz_dist[indices[sala]][indices[referencia]]
+        for referencia in referencias
+        if referencia in indices and referencia != sala
+    ]
+    return sum(distancias) / len(distancias) if distancias else 0.0
+
+
+def salas_candidatas_para_disciplina(
+    instancia,
+    solucao_x: SolucaoX,
+    codigo_disciplina: str,
+    max_salas: int = 5,
+) -> list[str]:
+    """Seleciona salas compativeis priorizando preferencia e proximidade do grupo."""
+    if max_salas <= 0:
+        raise ValueError("max_salas deve ser maior que zero.")
+    disciplina = instancia.disciplinas[codigo_disciplina]
+    indices = indexar_alocacoes(solucao_x)
+    preferenciais = set(disciplina.salasPreferenciais or ())
+    salas_disciplina = set(indices.salas_por_disciplina.get(codigo_disciplina, ()))
+    salas_grupo: set[str] = set()
+    for outro_codigo, outra in instancia.disciplinas.items():
+        if (
+            outra.curso == disciplina.curso
+            and outra.fase == disciplina.fase
+        ):
+            salas_grupo.update(indices.salas_por_disciplina.get(outro_codigo, ()))
+
+    compativeis = [
+        sala
+        for sala in instancia.salas_lista
+        if instancia.salas[sala].capacidade >= disciplina.max_alunos_agrupamento()
+    ]
+    compativeis.sort(
+        key=lambda sala: (
+            sala not in preferenciais,
+            sala not in salas_disciplina,
+            sala not in salas_grupo,
+            _distancia_media_para_salas(
+                sala, salas_grupo, instancia.salas_lista, instancia.matriz_dist
+            ),
+            sala,
+        )
+    )
+    return compativeis[:max_salas]
+
+
+def bloqueadores_das_disciplinas(
+    instancia,
+    solucao_x: SolucaoX,
+    sementes: Iterable[str],
+    max_salas_candidatas: int = 5,
+) -> tuple[set[str], Counter]:
+    """Encontra disciplinas que ocupam salas candidatas nos mesmos horarios."""
+    sementes = set(sementes)
+    indices = indexar_alocacoes(solucao_x)
+    relevancia: Counter = Counter()
+    for codigo in sorted(sementes):
+        salas = salas_candidatas_para_disciplina(
+            instancia, solucao_x, codigo, max_salas_candidatas
+        )
+        for horario in instancia.disciplinas[codigo].horarios_agrupamento():
+            for sala in salas:
+                bloqueador = indices.ocupante_por_sala_horario.get((sala, horario))
+                if bloqueador is not None and bloqueador not in sementes:
+                    relevancia[bloqueador] += 1
+    return set(relevancia), relevancia
+
+
+def quantidade_variaveis_x(instancia, disciplinas: Iterable[str]) -> int:
+    return sum(
+        len(instancia.disciplinas[codigo].horarios_agrupamento())
+        * len(instancia.salas)
+        for codigo in set(disciplinas)
+    )
+
+
+def vizinhanca_penalidade_bloqueadores(
+    instancia,
+    solucao_x: SolucaoX,
+    sementes_por_vizinhanca: int = 5,
+    max_salas_candidatas: int = 5,
+    percentual_x_maximo: float = 0.12,
+    sementes_ignoradas: Iterable[str] = (),
+) -> Vizinhanca | None:
+    """Monta uma vizinhanca limitada com sementes penalizadas e bloqueadores."""
+    if sementes_por_vizinhanca <= 0:
+        raise ValueError("sementes_por_vizinhanca deve ser maior que zero.")
+    if not 0 < percentual_x_maximo <= 1:
+        raise ValueError("percentual_x_maximo deve estar no intervalo (0, 1].")
+
+    ranking = [
+        item
+        for item in calcular_penalidades_disciplinas(instancia, solucao_x)
+        if item.score > 0 and item.disciplina not in set(sementes_ignoradas)
+    ]
+    if not ranking:
+        return None
+
+    total_x = quantidade_variaveis_x(instancia, instancia.disciplinas)
+    limite_x = max(1, int(total_x * percentual_x_maximo))
+    sementes: list[str] = []
+    for item in ranking:
+        candidato = sementes + [item.disciplina]
+        if sementes and quantidade_variaveis_x(instancia, candidato) > limite_x:
+            continue
+        sementes.append(item.disciplina)
+        if len(sementes) >= sementes_por_vizinhanca:
+            break
+    if not sementes:
+        sementes = [ranking[0].disciplina]
+
+    bloqueadores, relevancia = bloqueadores_das_disciplinas(
+        instancia,
+        solucao_x,
+        sementes,
+        max_salas_candidatas=max_salas_candidatas,
+    )
+    scores = {item.disciplina: item.score for item in ranking}
+    liberadas = set(sementes)
+    for bloqueador in sorted(
+        bloqueadores,
+        key=lambda codigo: (-relevancia[codigo], -scores.get(codigo, 0), codigo),
+    ):
+        candidato = liberadas | {bloqueador}
+        if quantidade_variaveis_x(instancia, candidato) <= limite_x:
+            liberadas.add(bloqueador)
+
+    variaveis_livres = quantidade_variaveis_x(instancia, liberadas)
+    recurso = "seeds_" + "-".join(sementes)
+    bloqueadores_incluidos = sorted(liberadas - set(sementes))
+    return Vizinhanca(
+        tipo="penalidade_bloqueadores",
+        recurso=recurso,
+        disciplinas_liberadas=frozenset(liberadas),
+        justificativa=(
+            "Libera disciplinas penalizadas e ocupantes de suas salas "
+            "candidatas nos mesmos horarios."
+        ),
+        metadados={
+            "sementes": ";".join(sementes),
+            "bloqueadores": ";".join(bloqueadores_incluidos),
+            "quantidade_sementes": len(sementes),
+            "quantidade_bloqueadores": len(bloqueadores_incluidos),
+            "score_sementes": round(sum(scores[codigo] for codigo in sementes), 2),
+            "conflitos_encontrados": sum(relevancia.values()),
+            "variaveis_x_estimadas": variaveis_livres,
+            "percentual_x_estimado": round(variaveis_livres / total_x, 6),
+            "limite_variaveis_x": limite_x,
+            "profundidade_expansao": 1,
+        },
+    )
 
 
 def aplicar_start_x(x_vars, solucao_x: SolucaoX) -> dict[str, int]:

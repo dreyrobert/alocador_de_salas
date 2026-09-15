@@ -18,10 +18,13 @@ from alocador_salas.optimization.lns_fix_and_optimize import (
     SolucaoX,
     Vizinhanca,
     cursos_da_instancia,
+    parse_objetivo_sol,
+    parse_solucao_x,
     salvar_historico_csv,
     salvar_solucao_x,
     solucao_melhorou,
     vizinhanca_por_curso,
+    vizinhanca_penalidade_bloqueadores,
     vizinhancas_por_dia_turno,
 )
 
@@ -190,6 +193,7 @@ def executar_passada_por_vizinhancas(
             dia, turno = vizinhanca.recurso.split("_", maxsplit=1)
             registro["dia"] = int(dia)
             registro["turno"] = turno
+        registro.update(vizinhanca.metadados)
         historico_passada.append(registro)
 
     return incumbente_atual, historico_passada
@@ -264,6 +268,89 @@ def executar_passada_por_dia_turno(
     )
 
 
+def executar_busca_penalidade_bloqueadores(
+    solucao_incumbente_x: SolucaoX,
+    instancia: InstanciaAlocacao,
+    modelo_alocacao,
+    pasta_candidatos: str | Path = PASTA_CANDIDATOS_PADRAO,
+    tempo_subproblema: float = 120,
+    numero_passada: int = 1,
+    numero_ciclo: int = 1,
+    objetivo_incumbente_inicial: float | None = None,
+    preparar_modelo: Callable = preparar_modelo_para_vizinhanca,
+    resolver: Callable = resolver_modelo,
+    tempo_fim_total: float | None = None,
+    salvar_candidatos: bool = False,
+    sementes_por_vizinhanca: int = 5,
+    max_salas_candidatas: int = 5,
+    percentual_x_maximo: float = 0.12,
+    max_falhas_consecutivas: int = 10,
+) -> tuple[dict, list[dict]]:
+    """Executa LNS adaptativa, reconstruindo a vizinhanca apos cada melhoria."""
+    if max_falhas_consecutivas <= 0:
+        raise ValueError("max_falhas_consecutivas deve ser maior que zero.")
+    incumbente = {
+        "solucoes": 1 if objetivo_incumbente_inicial is not None else 0,
+        "objetivo": objetivo_incumbente_inicial,
+        "arquivo_solucao": None,
+        "solucao_x": solucao_incumbente_x,
+    }
+    historico: list[dict] = []
+    falhas = 0
+    sementes_ignoradas: set[str] = set()
+    assinaturas: set[frozenset[str]] = set()
+
+    while falhas < max_falhas_consecutivas:
+        if tempo_fim_total is not None and time.time() >= tempo_fim_total:
+            break
+        vizinhanca = vizinhanca_penalidade_bloqueadores(
+            instancia,
+            incumbente["solucao_x"],
+            sementes_por_vizinhanca=sementes_por_vizinhanca,
+            max_salas_candidatas=max_salas_candidatas,
+            percentual_x_maximo=percentual_x_maximo,
+            sementes_ignoradas=sementes_ignoradas,
+        )
+        if vizinhanca is None:
+            break
+        assinatura = vizinhanca.disciplinas_liberadas
+        if assinatura in assinaturas:
+            sementes_ignoradas.update(vizinhanca.metadados["sementes"].split(";"))
+            continue
+        assinaturas.add(assinatura)
+
+        candidato, registros = executar_passada_por_vizinhancas(
+            solucao_incumbente_x=incumbente["solucao_x"],
+            modelo_alocacao=modelo_alocacao,
+            vizinhancas=[vizinhanca],
+            pasta_candidatos=pasta_candidatos,
+            tempo_subproblema=tempo_subproblema,
+            numero_passada=numero_passada,
+            numero_ciclo=numero_ciclo,
+            objetivo_incumbente_inicial=incumbente["objetivo"],
+            preparar_modelo=preparar_modelo,
+            resolver=resolver,
+            tempo_fim_total=tempo_fim_total,
+            salvar_candidatos=salvar_candidatos,
+        )
+        if not registros:
+            break
+        registro = registros[0]
+        registro["iteracao"] = len(historico) + 1
+        registro["falhas_consecutivas_antes"] = falhas
+        historico.append(registro)
+        if registro["melhorou"]:
+            incumbente = candidato
+            falhas = 0
+            sementes_ignoradas.clear()
+            assinaturas.clear()
+        else:
+            falhas += 1
+            sementes_ignoradas.update(vizinhanca.metadados["sementes"].split(";"))
+
+    return incumbente, historico
+
+
 def executar_fix_and_optimize(
     arquivo_horarios: str = ARQUIVO_HORARIOS_PADRAO,
     arquivo_salas: str = ARQUIVO_SALAS_PADRAO,
@@ -278,14 +365,22 @@ def executar_fix_and_optimize(
     apenas_uma_passada: bool = False,
     salvar_candidatos: bool = False,
     tipo_vizinhanca: str = "curso",
+    arquivo_solucao_inicial: str | None = None,
+    sementes_por_vizinhanca: int = 5,
+    max_salas_candidatas: int = 5,
+    percentual_x_maximo: float = 0.12,
+    max_falhas_consecutivas: int = 10,
     carregar: Callable = carregar_instancia,
     construir: Callable = construir_modelo,
     preparar_modelo: Callable = preparar_modelo_para_vizinhanca,
     liberar_modelo: Callable = liberar_fixacoes_modelo,
     resolver: Callable = resolver_modelo,
 ) -> dict:
-    """Executa o fix-and-optimize por curso, dia/turno ou de forma hibrida."""
-    tipos_validos = {"curso", "dia_turno", "hibrida"}
+    """Executa o fix-and-optimize com a estrategia de vizinhanca escolhida."""
+    tipos_validos = {
+        "curso", "dia_turno", "hibrida",
+        "penalidade_bloqueadores", "hibrida_adaptativa",
+    }
     if tipo_vizinhanca not in tipos_validos:
         raise ValueError(
             f"Tipo de vizinhanca invalido: {tipo_vizinhanca}. "
@@ -317,14 +412,34 @@ def executar_fix_and_optimize(
     solucao_final_x: SolucaoX | None = None
 
     try:
-        resultado_inicial = resolver(
-            modelo_alocacao,
-            parametros_gurobi=parametros_primeira_solucao(
-                tempo_modelo=tempo_modelo_inicial,
-                tempo_heuristica=tempo_heuristica_inicial,
-            ),
-            arquivo_solucao=None,
-        )
+        if arquivo_solucao_inicial:
+            solucao_carregada = parse_solucao_x(arquivo_solucao_inicial)
+            objetivo_carregado = parse_objetivo_sol(arquivo_solucao_inicial)
+            if objetivo_carregado is None:
+                raise ValueError("A solucao inicial deve informar '# Objective value = ...'.")
+            chaves_modelo = set(modelo_alocacao.x)
+            desconhecidas = set(solucao_carregada) - chaves_modelo
+            ausentes = chaves_modelo - set(solucao_carregada)
+            if desconhecidas or ausentes:
+                raise ValueError(
+                    "Solucao inicial incompativel com o modelo: "
+                    f"{len(desconhecidas)} chaves desconhecidas e {len(ausentes)} ausentes."
+                )
+            resultado_inicial = {
+                "status_nome": "CARREGADA",
+                "solucoes": 1,
+                "objetivo": objetivo_carregado,
+                "solucao_x": solucao_carregada,
+            }
+        else:
+            resultado_inicial = resolver(
+                modelo_alocacao,
+                parametros_gurobi=parametros_primeira_solucao(
+                    tempo_modelo=tempo_modelo_inicial,
+                    tempo_heuristica=tempo_heuristica_inicial,
+                ),
+                arquivo_solucao=None,
+            )
         resultado_inicial["etapa"] = "primeira_solucao"
         obj_inicial = resultado_inicial.get("objetivo")
         solucao_x_atual: SolucaoX | None = resultado_inicial.get("solucao_x")
@@ -342,7 +457,11 @@ def executar_fix_and_optimize(
             cursos = cursos_da_instancia(instancia)
             passada = 1
             ciclo = 1
-            tipo_passada = "curso" if tipo_vizinhanca == "hibrida" else tipo_vizinhanca
+            tipo_passada = (
+                "curso"
+                if tipo_vizinhanca in {"hibrida", "hibrida_adaptativa"}
+                else tipo_vizinhanca
+            )
 
             while incumbente_atual.get("solucao_x") is not None:
                 if tempo_total_maximo and (time.time() - t_inicio_total) >= tempo_total_maximo:
@@ -366,9 +485,17 @@ def executar_fix_and_optimize(
                         cursos=list(cursos),
                         **argumentos_passada,
                     )
-                else:
+                elif tipo_passada == "dia_turno":
                     incumbente_passada, hist_passada = executar_passada_por_dia_turno(
                         **argumentos_passada,
+                    )
+                else:
+                    incumbente_passada, hist_passada = executar_busca_penalidade_bloqueadores(
+                        **argumentos_passada,
+                        sementes_por_vizinhanca=sementes_por_vizinhanca,
+                        max_salas_candidatas=max_salas_candidatas,
+                        percentual_x_maximo=percentual_x_maximo,
+                        max_falhas_consecutivas=max_falhas_consecutivas,
                     )
 
                 melhorias_na_passada = sum(1 for reg in hist_passada if reg["melhorou"])
@@ -388,6 +515,14 @@ def executar_fix_and_optimize(
                         ciclo += 1
                     elif melhorias_na_passada == 0:
                         # Otimo local em relacao aos dois tipos de vizinhanca.
+                        break
+                elif tipo_vizinhanca == "hibrida_adaptativa":
+                    if tipo_passada == "curso" and melhorias_na_passada == 0:
+                        tipo_passada = "penalidade_bloqueadores"
+                    elif tipo_passada == "penalidade_bloqueadores" and melhorias_na_passada > 0:
+                        tipo_passada = "curso"
+                        ciclo += 1
+                    elif melhorias_na_passada == 0:
                         break
                 elif melhorias_na_passada == 0:
                     break
@@ -430,6 +565,13 @@ def executar_fix_and_optimize(
         "arquivo_melhor_solucao": str(caminho_melhor),
         "arquivo_log_csv": arquivo_log_csv,
         "arquivo_log_json": arquivo_log_json,
+        "arquivo_solucao_inicial": arquivo_solucao_inicial,
+        "parametros_vizinhanca": {
+            "sementes_por_vizinhanca": sementes_por_vizinhanca,
+            "max_salas_candidatas": max_salas_candidatas,
+            "percentual_x_maximo": percentual_x_maximo,
+            "max_falhas_consecutivas": max_falhas_consecutivas,
+        },
         "historico": historico_total,
     }
 
@@ -448,6 +590,11 @@ def main() -> dict:
     parser.add_argument("--salas", default=ARQUIVO_SALAS_PADRAO)
     parser.add_argument("--preferenciais", default=ARQUIVO_PREFERENCIAIS_PADRAO)
     parser.add_argument("--salvar-solucao", default="")
+    parser.add_argument(
+        "--solucao-inicial",
+        default=None,
+        help="Reutiliza uma solucao .sol completa, com objetivo no cabecalho.",
+    )
     parser.add_argument("--tempo-modelo", type=float, default=300)
     parser.add_argument("--tempo-heuristica", type=float, default=300)
     parser.add_argument("--tempo-subproblema", type=float, default=300)
@@ -455,13 +602,22 @@ def main() -> dict:
     parser.add_argument("--apenas-uma-passada", action="store_true")
     parser.add_argument(
         "--tipo-vizinhanca",
-        choices=["curso", "dia_turno", "hibrida"],
+        choices=[
+            "curso",
+            "dia_turno",
+            "hibrida",
+            "penalidade_bloqueadores",
+            "hibrida_adaptativa",
+        ],
         default="curso",
         help=(
-            "Escolhe vizinhancas por curso, por dia/turno ou busca hibrida "
-            "(curso seguido de dia/turno quando houver estagnacao)."
+            "Escolhe a estrategia de vizinhanca da busca local."
         ),
     )
+    parser.add_argument("--sementes-por-vizinhanca", type=int, default=5)
+    parser.add_argument("--max-salas-candidatas", type=int, default=5)
+    parser.add_argument("--percentual-x-maximo", type=float, default=0.12)
+    parser.add_argument("--max-falhas-consecutivas", type=int, default=10)
     parser.add_argument("--log-csv", default=ARQUIVO_HISTORICO_CSV_PADRAO)
     parser.add_argument("--log-json", default=ARQUIVO_HISTORICO_JSON_PADRAO)
     parser.add_argument(
@@ -485,6 +641,11 @@ def main() -> dict:
         apenas_uma_passada=args.apenas_uma_passada,
         salvar_candidatos=args.salvar_candidatos,
         tipo_vizinhanca=args.tipo_vizinhanca,
+        arquivo_solucao_inicial=args.solucao_inicial,
+        sementes_por_vizinhanca=args.sementes_por_vizinhanca,
+        max_salas_candidatas=args.max_salas_candidatas,
+        percentual_x_maximo=args.percentual_x_maximo,
+        max_falhas_consecutivas=args.max_falhas_consecutivas,
     )
     print("RESULTADO_JSON=" + json.dumps(resultado, ensure_ascii=False, sort_keys=True))
     return resultado

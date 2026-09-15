@@ -2,12 +2,14 @@ import tempfile
 import unittest
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 from alocador_salas.domain.horario import Horario
 from alocador_salas.optimization.lns_fix_and_optimize import Vizinhanca
 from alocador_salas.optimization.main_fix_and_optimize import (
     executar_fix_and_optimize,
     executar_fix_and_optimize_cursos,
+    executar_busca_penalidade_bloqueadores,
     executar_passada_por_cursos,
     executar_passada_por_dia_turno,
     parametros_primeira_solucao,
@@ -53,7 +55,90 @@ class DisciplinaFake:
         }
 
 
+class SalaFake:
+    def __init__(self, capacidade):
+        self.capacidade = capacidade
+
+
 class TestMainFixAndOptimize(unittest.TestCase):
+    def test_busca_penalidade_reconstroi_vizinhanca_apos_melhoria(self):
+        disciplinas = {
+            "D1": DisciplinaFake("CC", 1, 30, ["Horario_2_1"], ["A"]),
+            "D2": DisciplinaFake("ADM", 1, 30, ["Horario_2_1"], ["B"]),
+        }
+        instancia = InstanciaFake(disciplinas)
+        instancia.salas = {"A": SalaFake(50), "B": SalaFake(50)}
+        instancia.salas_lista = ["A", "B"]
+        instancia.matriz_dist = [[0, 1], [1, 0]]
+        solucao = {
+            ("D1", "A", "Horario_2_1"): 0,
+            ("D1", "B", "Horario_2_1"): 1,
+            ("D2", "A", "Horario_2_1"): 1,
+            ("D2", "B", "Horario_2_1"): 0,
+        }
+        objetivos = iter([90.0, 90.0])
+
+        def resolver_fake(*args, **kwargs):
+            return {
+                "status_nome": "OPTIMAL",
+                "solucoes": 1,
+                "objetivo": next(objetivos),
+                "solucao_x": solucao,
+                "lns": {"variaveis_x_livres": 4, "variaveis_x_fixadas": 0},
+            }
+
+        incumbente, historico = executar_busca_penalidade_bloqueadores(
+            solucao,
+            instancia,
+            modelo_alocacao="modelo",
+            objetivo_incumbente_inicial=100.0,
+            preparar_modelo=lambda *args, **kwargs: None,
+            resolver=resolver_fake,
+            sementes_por_vizinhanca=1,
+            percentual_x_maximo=1,
+            max_falhas_consecutivas=1,
+        )
+
+        self.assertEqual(incumbente["objetivo"], 90.0)
+        self.assertEqual(len(historico), 2)
+        self.assertTrue(historico[0]["melhorou"])
+        self.assertFalse(historico[1]["melhorou"])
+        self.assertIn("sementes", historico[0])
+        self.assertIn("bloqueadores", historico[0])
+
+    def test_fixopt_carrega_solucao_inicial_sem_chamar_solver_inicial(self):
+        disciplina = DisciplinaFake("CC", 1, 30, ["Horario_2_1"], ["A"])
+        instancia = InstanciaFake({"D1": disciplina})
+        instancia.salas = {"A": SalaFake(50)}
+        instancia.salas_lista = ["A"]
+        instancia.matriz_dist = [[0]]
+        chave = ("D1", "A", "Horario_2_1")
+        modelo = SimpleNamespace(x={chave: object()})
+        chamadas = []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            inicial = Path(temp_dir) / "inicial.sol"
+            inicial.write_text(
+                "# Objective value = 100\nx[D1,A,Horario_2_1] 1\n",
+                encoding="utf-8",
+            )
+            resultado = executar_fix_and_optimize(
+                tipo_vizinhanca="penalidade_bloqueadores",
+                arquivo_solucao_inicial=str(inicial),
+                arquivo_melhor_solucao=str(Path(temp_dir) / "melhor.sol"),
+                arquivo_log_csv="",
+                arquivo_log_json="",
+                carregar=lambda *args: instancia,
+                construir=lambda *args: modelo,
+                preparar_modelo=lambda *args, **kwargs: None,
+                liberar_modelo=lambda *args: None,
+                resolver=lambda *args, **kwargs: chamadas.append(1),
+            )
+
+        self.assertEqual(chamadas, [])
+        self.assertEqual(resultado["objetivo_inicial"], 100.0)
+        self.assertEqual(resultado["objetivo_final"], 100.0)
+
     def test_parametros_primeira_solucao_usa_limites_de_300s_por_padrao(self):
         self.assertEqual(
             parametros_primeira_solucao(),

@@ -9,6 +9,8 @@ from alocador_salas.optimization.lns_fix_and_optimize_compat import (
 )
 from alocador_salas.optimization.lns_fix_and_optimize import (
     aplicar_start_x,
+    bloqueadores_das_disciplinas,
+    calcular_penalidades_disciplinas,
     cursos_da_instancia,
     disciplinas_do_dia_turno,
     disciplinas_do_curso,
@@ -20,10 +22,12 @@ from alocador_salas.optimization.lns_fix_and_optimize import (
     preparar_fixacao_vizinhanca_x,
     salvar_historico_csv,
     salvar_solucao_x,
+    salas_candidatas_para_disciplina,
     solucao_melhorou,
     vizinhanca_por_curso,
     vizinhanca_por_dia_turno,
     vizinhancas_por_dia_turno,
+    vizinhanca_penalidade_bloqueadores,
 )
 
 
@@ -31,6 +35,8 @@ class DisciplinaFake:
     def __init__(self, curso, fase, horarios=None, horarios_agrupados=None):
         self.curso = curso
         self.fase = fase
+        self.alunos = 30
+        self.salasPreferenciais = []
         self.horarios = horarios or {}
         self._horarios_agrupados = horarios_agrupados
 
@@ -38,6 +44,9 @@ class DisciplinaFake:
         if self._horarios_agrupados is not None:
             return self._horarios_agrupados
         return self.horarios
+
+    def max_alunos_agrupamento(self):
+        return self.alunos
 
 
 class VarFake:
@@ -48,7 +57,108 @@ class VarFake:
         self.UB = None
 
 
+class SalaFake:
+    def __init__(self, capacidade):
+        self.capacidade = capacidade
+
+
+class InstanciaVizinhancaFake:
+    def __init__(self, disciplinas, salas, matriz_dist=None):
+        self.disciplinas = disciplinas
+        self.salas = salas
+        self.salas_lista = list(salas)
+        tamanho = len(salas)
+        self.matriz_dist = matriz_dist or [
+            [abs(i - j) for j in range(tamanho)] for i in range(tamanho)
+        ]
+
+
 class TestLnsFixAndOptimize(unittest.TestCase):
+    def test_penalidade_prioriza_nao_alocada_e_sala_nao_preferencial(self):
+        disciplinas = {
+            "D1": DisciplinaFake("CC", 1, {"Horario_2_1": Horario(2, 1)}),
+            "D2": DisciplinaFake("CC", 1, {"Horario_2_2": Horario(2, 2)}),
+        }
+        disciplinas["D1"].salasPreferenciais = ["A"]
+        disciplinas["D2"].salasPreferenciais = ["A"]
+        instancia = InstanciaVizinhancaFake(
+            disciplinas, {"A": SalaFake(50), "B": SalaFake(50)}
+        )
+        solucao = {("D2", "B", "Horario_2_2"): 1}
+
+        ranking = calcular_penalidades_disciplinas(instancia, solucao)
+
+        self.assertEqual([item.disciplina for item in ranking], ["D1", "D2"])
+        self.assertEqual(ranking[0].horarios_nao_alocados, 1)
+        self.assertEqual(ranking[1].alocacoes_nao_preferenciais, 1)
+
+    def test_salas_candidatas_respeitam_capacidade_e_preferencia(self):
+        disciplina = DisciplinaFake("CC", 1, {"Horario_2_1": Horario(2, 1)})
+        disciplina.alunos = 40
+        disciplina.salasPreferenciais = ["P"]
+        instancia = InstanciaVizinhancaFake(
+            {"D1": disciplina},
+            {"PEQUENA": SalaFake(20), "N": SalaFake(50), "P": SalaFake(40)},
+        )
+
+        candidatas = salas_candidatas_para_disciplina(instancia, {}, "D1", 2)
+
+        self.assertEqual(candidatas, ["P", "N"])
+
+    def test_bloqueadores_ocupam_sala_candidata_no_mesmo_horario(self):
+        disciplinas = {
+            "D1": DisciplinaFake("CC", 1, {"Horario_2_1": Horario(2, 1)}),
+            "D2": DisciplinaFake("ADM", 1, {"Horario_2_1": Horario(2, 1)}),
+            "D3": DisciplinaFake("ADM", 1, {"Horario_2_2": Horario(2, 2)}),
+        }
+        for disciplina in disciplinas.values():
+            disciplina.alunos = 30
+        disciplinas["D1"].salasPreferenciais = ["A"]
+        instancia = InstanciaVizinhancaFake(
+            disciplinas, {"A": SalaFake(50), "B": SalaFake(50)}
+        )
+        solucao = {
+            ("D2", "A", "Horario_2_1"): 1,
+            ("D3", "A", "Horario_2_2"): 1,
+        }
+
+        bloqueadores, relevancia = bloqueadores_das_disciplinas(
+            instancia, solucao, {"D1"}, max_salas_candidatas=1
+        )
+
+        self.assertEqual(bloqueadores, {"D2"})
+        self.assertEqual(relevancia["D2"], 1)
+
+    def test_vizinhanca_inclui_semente_e_bloqueador_e_respeita_orcamento(self):
+        disciplinas = {
+            "D1": DisciplinaFake("CC", 1, {"Horario_2_1": Horario(2, 1)}),
+            "D2": DisciplinaFake("ADM", 1, {"Horario_2_1": Horario(2, 1)}),
+            "D3": DisciplinaFake("MAT", 1, {"Horario_3_1": Horario(3, 1)}),
+        }
+        for disciplina in disciplinas.values():
+            disciplina.alunos = 30
+            disciplina.salasPreferenciais = ["A"]
+        instancia = InstanciaVizinhancaFake(
+            disciplinas, {"A": SalaFake(50), "B": SalaFake(50)}
+        )
+        solucao = {
+            ("D2", "A", "Horario_2_1"): 1,
+            ("D3", "B", "Horario_3_1"): 1,
+        }
+
+        vizinhanca = vizinhanca_penalidade_bloqueadores(
+            instancia,
+            solucao,
+            sementes_por_vizinhanca=1,
+            max_salas_candidatas=1,
+            percentual_x_maximo=0.8,
+        )
+
+        self.assertIsNotNone(vizinhanca)
+        self.assertEqual(vizinhanca.tipo, "penalidade_bloqueadores")
+        self.assertEqual(vizinhanca.disciplinas_liberadas, frozenset({"D1", "D2"}))
+        self.assertLessEqual(vizinhanca.metadados["percentual_x_estimado"], 0.8)
+
     def test_parse_solucao_x_le_variaveis_do_arquivo_sol(self):
         conteudo = "\n".join(
             [

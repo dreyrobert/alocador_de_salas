@@ -78,7 +78,33 @@ pela linha de comando:
 uv run alocador-salas-fixopt --tipo-vizinhanca curso
 uv run alocador-salas-fixopt --tipo-vizinhanca dia_turno
 uv run alocador-salas-fixopt --tipo-vizinhanca hibrida
+uv run alocador-salas-fixopt --tipo-vizinhanca penalidade_bloqueadores
+uv run alocador-salas-fixopt --tipo-vizinhanca hibrida_adaptativa
 ```
 
 No modo hibrido, a busca explora cursos ate uma passada sem melhoria, tenta as
 vizinhancas por dia e turno e volta aos cursos se encontrar uma nova incumbente.
+
+A vizinhanca `penalidade_bloqueadores` seleciona disciplinas que mais contribuem
+para a penalidade atual e libera tambem quem ocupa suas salas candidatas nos
+mesmos horarios. Ela e reconstruida depois de cada melhoria. Seus principais
+limites podem ser configurados com:
+
+```bash
+uv run alocador-salas-fixopt \
+  --tipo-vizinhanca penalidade_bloqueadores \
+  --sementes-por-vizinhanca 5 \
+  --max-salas-candidatas 5 \
+  --percentual-x-maximo 0.12 \
+  --max-falhas-consecutivas 10
+```
+
+O modo `hibrida_adaptativa` alterna curso e penalidade/bloqueadores quando cada
+estrategia estagna. Para comparar estrategias a partir da mesma incumbente, use
+um arquivo completo gerado anteriormente pela propria heuristica:
+
+```bash
+uv run alocador-salas-fixopt \
+  --tipo-vizinhanca penalidade_bloqueadores \
+  --solucao-inicial resultados/experimentos/2024_1/inicial_comum.sol
+```
