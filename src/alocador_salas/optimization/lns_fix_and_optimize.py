@@ -8,6 +8,7 @@ responsavel apenas por construir e resolver o modelo.
 from __future__ import annotations
 
 import csv
+import random
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -295,6 +296,52 @@ def cursos_da_instancia(instancia) -> list[str]:
     if isinstance(cursos, dict):
         return sorted(cursos.keys())
     return sorted(cursos)
+
+
+def ordenar_cursos(
+    cursos: Iterable[str],
+    disciplinas,
+    criterio: str = "alfabetica",
+    seed: int | None = None,
+) -> list[str]:
+    """Ordena cursos para a passada de fix-and-optimize."""
+    cursos_ordenados = sorted(cursos)
+    criterio_normalizado = criterio.replace("_", "-")
+
+    if criterio_normalizado == "alfabetica":
+        return cursos_ordenados
+
+    if criterio_normalizado == "maior-demanda":
+        disicplinas_por_curso = {curso: 0 for curso in cursos_ordenados}
+        alunos_por_curso = {curso: 0 for curso in cursos_ordenados}
+        for disciplina in disciplinas.values():
+            curso = disciplina.curso
+            if curso not in disicplinas_por_curso:
+                continue
+
+            disicplinas_por_curso[curso] += 1
+            alunos_por_curso[curso] += int(getattr(disciplina, "alunos", 0) or 0)
+
+        return sorted(
+            cursos_ordenados,
+            key=lambda curso: (
+                -disicplinas_por_curso[curso],
+                -alunos_por_curso[curso],
+                curso,
+            ),
+        )
+
+    if criterio_normalizado == "aleatoria":
+        if seed is None:
+            raise ValueError("A ordenacao aleatoria exige seed para ser reprodutivel.")
+        cursos_embaralhados = list(cursos_ordenados)
+        random.Random(seed).shuffle(cursos_embaralhados)
+        return cursos_embaralhados
+
+    raise ValueError(
+        f"Criterio de ordenacao de cursos invalido: {criterio}. "
+        "Esperado um dos valores ['alfabetica', 'maior-demanda', 'aleatoria']."
+    )
 
 
 def salvar_historico_csv(historico: list[dict], caminho_csv: str | Path) -> None:

@@ -1,0 +1,367 @@
+[
+  {
+    "origem": "2024_1/fixopt_4h/fixopt_curso_init3min_sub10min_total4h.out",
+    "destino": "2024_1/ordem_cursos/total4h_inicial3min_norel3min_viz10min/alfabetica_referencia/fixopt_curso_init3min_sub10min_total4h.out",
+    "sha256": "cf5ce416d135d8fc4696bbe1fe094a4d04c9abe40c2b95f980c294e5902ac387"
+  },
+  {
+    "origem": "2024_1/fixopt_4h/fixopt_curso_init3min_sub10min_total4h.sol",
+    "destino": "2024_1/ordem_cursos/total4h_inicial3min_norel3min_viz10min/alfabetica_referencia/fixopt_curso_init3min_sub10min_total4h.sol",
+    "sha256": "22e1821dc4e9eff8d85ba5b42703969db88e504290a08ebdab79039e291a0eb3"
+  },
+  {
+    "origem": "2024_1/fixopt_4h/fixopt_curso_init3min_sub10min_total4h.csv",
+    "destino": "2024_1/ordem_cursos/total4h_inicial3min_norel3min_viz10min/alfabetica_referencia/fixopt_curso_init3min_sub10min_total4h.csv",
+    "sha256": "da62f31dc20f7251bc74cc1fa8cb251d0971e4f6b64fd9a5a79e0ca98144ec65"
+  },
+  {
+    "origem": "2024_1/fixopt_4h/fixopt_curso_init3min_sub10min_total4h.json",
+    "destino": "2024_1/ordem_cursos/total4h_inicial3min_norel3min_viz10min/alfabetica_referencia/fixopt_curso_init3min_sub10min_total4h.json",
+    "sha256": "cc9b0e7025a73b3eb47886170c1b374d1b89cf8bbc9947ea8001b921cac3968e"
+  },
+  {
+    "origem": "ordem_cursos_3min_4h/20260923_185629/maior_demanda.sol",
+    "destino": "2024_1/ordem_cursos/total4h_inicial3min_norel3min_viz10min/maior_demanda_20260923_185629/maior_demanda.sol",
+    "sha256": "b87b24894153c0505d759c5bb2cc692892a14ccb8e92079d989c8ccbbe253a9a"
+  },
+  {
+    "origem": "ordem_cursos_3min_4h/20260923_185629/maior_demanda.out",
+    "destino": "2024_1/ordem_cursos/total4h_inicial3min_norel3min_viz10min/maior_demanda_20260923_185629/maior_demanda.out",
+    "sha256": "41d1d528bf50c5dc1b40b7ccad078ebe48223a9b83368cd9c3efdf02028ae9a2"
+  },
+  {
+    "origem": "ordem_cursos_3min_4h/20260923_185629/maior_demanda.json",
+    "destino": "2024_1/ordem_cursos/total4h_inicial3min_norel3min_viz10min/maior_demanda_20260923_185629/maior_demanda.json",
+    "sha256": "49cc377a83f97a0c3f1b57cd99dab2b27673e38b4c3e68fd137b34845a73aec9"
+  },
+  {
+    "origem": "ordem_cursos_3min_4h/20260923_185629/maior_demanda.status",
+    "destino": "2024_1/ordem_cursos/total4h_inicial3min_norel3min_viz10min/maior_demanda_20260923_185629/maior_demanda.status",
+    "sha256": "8c8304a46b7a325b25088edcf37044e7d6e18a3781b707a9c56bfd5a93ac5bb7"
+  },
+  {
+    "origem": "ordem_cursos_3min_4h/20260923_185629/maior_demanda.csv",
+    "destino": "2024_1/ordem_cursos/total4h_inicial3min_norel3min_viz10min/maior_demanda_20260923_185629/maior_demanda.csv",
+    "sha256": "1984d5b5e256a3e4cb9d74e7f324a18ef142f0c74ca1cc030d41cbc4372058d1"
+  },
+  {
+    "origem": "ordem_cursos_3min_4h/20260923_185629/aleatoria_seed42.json",
+    "destino": "2024_1/ordem_cursos/total4h_inicial3min_norel3min_viz10min/aleatoria_seed42_20260923_185629/aleatoria_seed42.json",
+    "sha256": "9b1915b913a5af7021435847eb00336f7df1bb95858f54e843e591ea8931e50e"
+  },
+  {
+    "origem": "ordem_cursos_3min_4h/20260923_185629/aleatoria_seed42.sol",
+    "destino": "2024_1/ordem_cursos/total4h_inicial3min_norel3min_viz10min/aleatoria_seed42_20260923_185629/aleatoria_seed42.sol",
+    "sha256": "04e0a9f6a4bb9146abc91925adaa2694dd1e3edde6ef3172d6646de30f0beca6"
+  },
+  {
+    "origem": "ordem_cursos_3min_4h/20260923_185629/aleatoria_seed42.out",
+    "destino": "2024_1/ordem_cursos/total4h_inicial3min_norel3min_viz10min/aleatoria_seed42_20260923_185629/aleatoria_seed42.out",
+    "sha256": "b612d7eb954422587e8353870893a3d599f9d96baf94b95f7a53bc7831b71050"
+  },
+  {
+    "origem": "ordem_cursos_3min_4h/20260923_185629/aleatoria_seed42.status",
+    "destino": "2024_1/ordem_cursos/total4h_inicial3min_norel3min_viz10min/aleatoria_seed42_20260923_185629/aleatoria_seed42.status",
+    "sha256": "baefe3f1e91f1cc30f6df73e67cd3ec7f95a1cfcaf26f144a55bb32e747baf11"
+  },
+  {
+    "origem": "ordem_cursos_3min_4h/20260923_185629/aleatoria_seed42.csv",
+    "destino": "2024_1/ordem_cursos/total4h_inicial3min_norel3min_viz10min/aleatoria_seed42_20260923_185629/aleatoria_seed42.csv",
+    "sha256": "14b44890862ae554ab4a7b0581b3c9197d218cc322d4eb0812cc0346f1357266"
+  },
+  {
+    "origem": "2024_1/fixopt_4h/fixopt_dia_turno_init3min_sub10min_total4h.json",
+    "destino": "2024_1/outras_vizinhancas/total4h_inicial3min_norel3min_viz10min/dia_turno/fixopt_dia_turno_init3min_sub10min_total4h.json",
+    "sha256": "3e6d8511649820fb6617066ed673db43f76e0b2337df0f99f20a37aba6aea7c6"
+  },
+  {
+    "origem": "2024_1/fixopt_4h/fixopt_dia_turno_init3min_sub10min_total4h.sol",
+    "destino": "2024_1/outras_vizinhancas/total4h_inicial3min_norel3min_viz10min/dia_turno/fixopt_dia_turno_init3min_sub10min_total4h.sol",
+    "sha256": "476b981a28728b84e2b9ad8d264d7e4e3260545fd6564c1c9a25ac0a29169cbd"
+  },
+  {
+    "origem": "2024_1/fixopt_4h/fixopt_dia_turno_init3min_sub10min_total4h.out",
+    "destino": "2024_1/outras_vizinhancas/total4h_inicial3min_norel3min_viz10min/dia_turno/fixopt_dia_turno_init3min_sub10min_total4h.out",
+    "sha256": "268f699686761e704ebad9ac2caa853438b1ecccea5e7fd80eefb676fa63e383"
+  },
+  {
+    "origem": "2024_1/fixopt_4h/fixopt_dia_turno_init3min_sub10min_total4h.csv",
+    "destino": "2024_1/outras_vizinhancas/total4h_inicial3min_norel3min_viz10min/dia_turno/fixopt_dia_turno_init3min_sub10min_total4h.csv",
+    "sha256": "890fe3e01136cf7f2d512d62013fca62eacb8605bf47ff9789d78f3d0f8bd9ee"
+  },
+  {
+    "origem": "2024_1/fixopt_4h/fixopt_hibrida_init3min_sub10min_total4h.csv",
+    "destino": "2024_1/outras_vizinhancas/total4h_inicial3min_norel3min_viz10min/hibrida/fixopt_hibrida_init3min_sub10min_total4h.csv",
+    "sha256": "b85645e2eba1ed087998fef9d5d9036c403c251cb4ba6a141c579735e75c4d5f"
+  },
+  {
+    "origem": "2024_1/fixopt_4h/fixopt_hibrida_init3min_sub10min_total4h.sol",
+    "destino": "2024_1/outras_vizinhancas/total4h_inicial3min_norel3min_viz10min/hibrida/fixopt_hibrida_init3min_sub10min_total4h.sol",
+    "sha256": "ec3635169d3e3bfb7132207291e323204be7032203de0e8a35e132f2078190bf"
+  },
+  {
+    "origem": "2024_1/fixopt_4h/fixopt_hibrida_init3min_sub10min_total4h.json",
+    "destino": "2024_1/outras_vizinhancas/total4h_inicial3min_norel3min_viz10min/hibrida/fixopt_hibrida_init3min_sub10min_total4h.json",
+    "sha256": "4127a693e2e6fa7e3926546595eb552da2f3ec54c63de3ab18b4b32a8e21455d"
+  },
+  {
+    "origem": "2024_1/fixopt_4h/fixopt_hibrida_init3min_sub10min_total4h.out",
+    "destino": "2024_1/outras_vizinhancas/total4h_inicial3min_norel3min_viz10min/hibrida/fixopt_hibrida_init3min_sub10min_total4h.out",
+    "sha256": "76be1425bc0ae56217e10739bc9bca854ef4bbda70153edfb6593ea600b65ef2"
+  },
+  {
+    "origem": "2024_1/fixopt_4h/fixopt_total4h_init5min.csv",
+    "destino": "2024_1/fixopt_historico/total4h_inicial5min_norel5min_viz_tempo_restante/curso_alfabetica/fixopt_total4h_init5min.csv",
+    "sha256": "be061afb02e0dff0a646d3cbc16c49df47770d21ba8b5afc62f9dab2cba8d29b"
+  },
+  {
+    "origem": "2024_1/fixopt_4h/fixopt_total4h_init5min.sol",
+    "destino": "2024_1/fixopt_historico/total4h_inicial5min_norel5min_viz_tempo_restante/curso_alfabetica/fixopt_total4h_init5min.sol",
+    "sha256": "228475c354fd7e508f48881173397bd4851578a86b6d16cfa4e0b053d7100e64"
+  },
+  {
+    "origem": "2024_1/fixopt_4h/fixopt_total4h_init5min.json",
+    "destino": "2024_1/fixopt_historico/total4h_inicial5min_norel5min_viz_tempo_restante/curso_alfabetica/fixopt_total4h_init5min.json",
+    "sha256": "21670c30016851ffb3be871b79a7e700613b087cea3893db218b79c983d23e7b"
+  },
+  {
+    "origem": "2024_1/fixopt_4h/fixopt_total4h_init5min.out",
+    "destino": "2024_1/fixopt_historico/total4h_inicial5min_norel5min_viz_tempo_restante/curso_alfabetica/fixopt_total4h_init5min.out",
+    "sha256": "d3b4c6c571d88deb7cc04d488cf2cbd1ae64c8729ad44615918adefeb09f2e4f"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/fixopt_passada_init60_total300.csv",
+    "destino": "2024_1/fixopt_historico/total5min_inicial1min_norel1min_viz_tempo_restante/curso_alfabetica_uma_passada/fixopt_passada_init60_total300.csv",
+    "sha256": "25b5462ca71dca656f4bccc845bbeabab002cad1c360cdbba0f33aab8cb251bc"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/fixopt_passada_init60_total300.sol",
+    "destino": "2024_1/fixopt_historico/total5min_inicial1min_norel1min_viz_tempo_restante/curso_alfabetica_uma_passada/fixopt_passada_init60_total300.sol",
+    "sha256": "396e93cf115060e9e501e808a8769431f4581fd34d3f546c61ee7614f2af490a"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/fixopt_passada_init60_total300.json",
+    "destino": "2024_1/fixopt_historico/total5min_inicial1min_norel1min_viz_tempo_restante/curso_alfabetica_uma_passada/fixopt_passada_init60_total300.json",
+    "sha256": "7b21c6085266b1e58d8e8c83d602daf5c1c9a52a874ce17bf963d73d76e5928c"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/fixopt_passada_init60_total300.out",
+    "destino": "2024_1/fixopt_historico/total5min_inicial1min_norel1min_viz_tempo_restante/curso_alfabetica_uma_passada/fixopt_passada_init60_total300.out",
+    "sha256": "b5e1bab7dd22fa3f49339803d37834a036d907986f848f532c41d9a6c8c40de1"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/fixopt_passada_init120_total300.out",
+    "destino": "2024_1/fixopt_historico/total5min_inicial2min_norel2min_viz_tempo_restante/curso_alfabetica_uma_passada/fixopt_passada_init120_total300.out",
+    "sha256": "383ae03f3111c8f48c02484c631bbf321f6695b0def84dcc2777f6139dcf69b4"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/fixopt_passada_init120_total300.sol",
+    "destino": "2024_1/fixopt_historico/total5min_inicial2min_norel2min_viz_tempo_restante/curso_alfabetica_uma_passada/fixopt_passada_init120_total300.sol",
+    "sha256": "a25e9534b26f0f0a36ec8755e5b04388f776720c9ce8ebcfc0d217b2109ea00f"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/fixopt_passada_init120_total300.csv",
+    "destino": "2024_1/fixopt_historico/total5min_inicial2min_norel2min_viz_tempo_restante/curso_alfabetica_uma_passada/fixopt_passada_init120_total300.csv",
+    "sha256": "2e8d8d31a944f56262c2b1fad7a9f5ac73f631b470e131285fe3f55dad564001"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/fixopt_passada_init120_total300.json",
+    "destino": "2024_1/fixopt_historico/total5min_inicial2min_norel2min_viz_tempo_restante/curso_alfabetica_uma_passada/fixopt_passada_init120_total300.json",
+    "sha256": "afceaacd39985fddcf90b992a3d3a24847ab04c196c74d3601327988b34c822b"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/fixopt_passada_init180_total300.sol",
+    "destino": "2024_1/fixopt_historico/total5min_inicial3min_norel3min_viz_tempo_restante/curso_alfabetica_uma_passada/fixopt_passada_init180_total300.sol",
+    "sha256": "a4c98b9306c129e0c7fd31afca6024d94d46ec3650892c0d6529643a989fd530"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/fixopt_passada_init180_total300.out",
+    "destino": "2024_1/fixopt_historico/total5min_inicial3min_norel3min_viz_tempo_restante/curso_alfabetica_uma_passada/fixopt_passada_init180_total300.out",
+    "sha256": "62d5e2c34836dea22b20477b61e17112d4684d862fbe4b9be04eba597059d888"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/fixopt_passada_init180_total300.json",
+    "destino": "2024_1/fixopt_historico/total5min_inicial3min_norel3min_viz_tempo_restante/curso_alfabetica_uma_passada/fixopt_passada_init180_total300.json",
+    "sha256": "d55aacf5ebf50bf8042ba29d45ffafffbacde576c73acfb86b5f99cc6f618917"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/fixopt_passada_init180_total300.csv",
+    "destino": "2024_1/fixopt_historico/total5min_inicial3min_norel3min_viz_tempo_restante/curso_alfabetica_uma_passada/fixopt_passada_init180_total300.csv",
+    "sha256": "d986765cab010ff004658ae13361c0ae3969143fdea73dd2bea5f9ac1835b424"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/fixopt_passada_init240_total300.csv",
+    "destino": "2024_1/fixopt_historico/total5min_inicial4min_norel4min_viz_tempo_restante/curso_alfabetica_uma_passada/fixopt_passada_init240_total300.csv",
+    "sha256": "bf1c5365d341e9286d2dba17940bf16606e9caef225227a7d845c08901523515"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/fixopt_passada_init240_total300.json",
+    "destino": "2024_1/fixopt_historico/total5min_inicial4min_norel4min_viz_tempo_restante/curso_alfabetica_uma_passada/fixopt_passada_init240_total300.json",
+    "sha256": "d3f9a1820fa77677b3e5eb59088c021a68508907e2aae5a26ce503ed73a6e00e"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/fixopt_passada_init240_total300.out",
+    "destino": "2024_1/fixopt_historico/total5min_inicial4min_norel4min_viz_tempo_restante/curso_alfabetica_uma_passada/fixopt_passada_init240_total300.out",
+    "sha256": "d761120fc4a082fa237fc489d06cacd397a4d795c50262b747117f4a255ccf60"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/fixopt_passada_init240_total300.sol",
+    "destino": "2024_1/fixopt_historico/total5min_inicial4min_norel4min_viz_tempo_restante/curso_alfabetica_uma_passada/fixopt_passada_init240_total300.sol",
+    "sha256": "0c5f98f64d69cfcfa45da0ae595206b265e87e303e696259b951481ce4cafd6b"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/experimento_2024_1_fixopt_total300_init180.sol",
+    "destino": "2024_1/fixopt_historico/total5min_inicial3min_norel_nao_registrado_viz_tempo_restante/curso_alfabetica_sem_log/experimento_2024_1_fixopt_total300_init180.sol",
+    "sha256": "a4c98b9306c129e0c7fd31afca6024d94d46ec3650892c0d6529643a989fd530"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/experimento_2024_1_fixopt_total300_init180.json",
+    "destino": "2024_1/fixopt_historico/total5min_inicial3min_norel_nao_registrado_viz_tempo_restante/curso_alfabetica_sem_log/experimento_2024_1_fixopt_total300_init180.json",
+    "sha256": "d11a3c37f33b4c5661152642d59540870cbd4bccf949547834d772cdfdf5564c"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/experimento_2024_1_fixopt_total300_init180.csv",
+    "destino": "2024_1/fixopt_historico/total5min_inicial3min_norel_nao_registrado_viz_tempo_restante/curso_alfabetica_sem_log/experimento_2024_1_fixopt_total300_init180.csv",
+    "sha256": "256c0b301bdeb743357f79062ca4b68cb4b5daac611e2e7a46a3230a3319896f"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/experimento_2024_1_fixopt_300.sol",
+    "destino": "2024_1/parametros_incompletos/experimento_fixopt_300_sem_log/experimento_2024_1_fixopt_300.sol",
+    "sha256": "87d86a44c5d7d492ecbfda77d0aa37266bb53585a4ca8bca84cc4c579ed6ca03"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/experimento_2024_1_fixopt_300.json",
+    "destino": "2024_1/parametros_incompletos/experimento_fixopt_300_sem_log/experimento_2024_1_fixopt_300.json",
+    "sha256": "5912dc812e2b7eaaed105af4aabd1dcb32e96b6a3afdb3a523684cf68e18a17f"
+  },
+  {
+    "origem": "2024_1/fixopt_300s/experimento_2024_1_fixopt_300.csv",
+    "destino": "2024_1/parametros_incompletos/experimento_fixopt_300_sem_log/experimento_2024_1_fixopt_300.csv",
+    "sha256": "129d055c3796ebb958ae3bcdf028964e805be0a7faae250fe2ee109281762f99"
+  },
+  {
+    "origem": "ordem_cursos_3s/historico_alfabetica.json",
+    "destino": "2024_1/ordem_cursos/historico_total_nao_registrado_inicial3s_norel3s_viz10min/alfabetica/historico_alfabetica.json",
+    "sha256": "c472d3ca39623738d1d9e89cccb560d4780e3396056b75c857d57e00f5e9cb5b"
+  },
+  {
+    "origem": "ordem_cursos_3s/alfabetica.out",
+    "destino": "2024_1/ordem_cursos/historico_total_nao_registrado_inicial3s_norel3s_viz10min/alfabetica/alfabetica.out",
+    "sha256": "c4a7fb23413d8fd67cec4fbb52ab7ac25f0e75c67a2629769101ae321ff994ec"
+  },
+  {
+    "origem": "ordem_cursos_3s/historico_alfabetica.csv",
+    "destino": "2024_1/ordem_cursos/historico_total_nao_registrado_inicial3s_norel3s_viz10min/alfabetica/historico_alfabetica.csv",
+    "sha256": "da7a79a4512537ee54bd657f879772002c9d41dcf43ac02f753483c9b5f64212"
+  },
+  {
+    "origem": "ordem_cursos_3s/melhor_alfabetica.sol",
+    "destino": "2024_1/ordem_cursos/historico_total_nao_registrado_inicial3s_norel3s_viz10min/alfabetica/melhor_alfabetica.sol",
+    "sha256": "18686724a67180a2dfd8f025485fa4eed0d01f01b421a3d043b388930d53ef6c"
+  },
+  {
+    "origem": "ordem_cursos_3s/aleatoria_seed42.out",
+    "destino": "2024_1/ordem_cursos/historico_total_nao_registrado_inicial3s_norel3s_viz10min/aleatoria_seed42/aleatoria_seed42.out",
+    "sha256": "41e1e07516c5b57fbdeadd972d5ae76b7fe3400c976e4258aa34a9a3d27ad2f3"
+  },
+  {
+    "origem": "ordem_cursos_3s/melhor_aleatoria_seed42.sol",
+    "destino": "2024_1/ordem_cursos/historico_total_nao_registrado_inicial3s_norel3s_viz10min/aleatoria_seed42/melhor_aleatoria_seed42.sol",
+    "sha256": "3fba4109dd2ed0b3ea8b84cc30fc9c9436b7215ed9e541c40f9c053bd9c2432c"
+  },
+  {
+    "origem": "ordem_cursos_3s/historico_aleatoria_seed42.csv",
+    "destino": "2024_1/ordem_cursos/historico_total_nao_registrado_inicial3s_norel3s_viz10min/aleatoria_seed42/historico_aleatoria_seed42.csv",
+    "sha256": "d089bbc67e79571a9d283232d62c381f6778563ce100da175b8c164e5360033d"
+  },
+  {
+    "origem": "ordem_cursos_3s/historico_aleatoria_seed42.json",
+    "destino": "2024_1/ordem_cursos/historico_total_nao_registrado_inicial3s_norel3s_viz10min/aleatoria_seed42/historico_aleatoria_seed42.json",
+    "sha256": "b6ba366f955c9a06252e63aa6e941ec72755c476f872a682097b1b1ae8ebfc66"
+  },
+  {
+    "origem": "ordem_cursos_3s/melhor_maior_demanda2.sol",
+    "destino": "2024_1/ordem_cursos/historico_total_nao_registrado_inicial3s_norel3s_viz10min/maior_demanda2/melhor_maior_demanda2.sol",
+    "sha256": "76b87d0c8979d86b1a5ccb899f36a276cdbcea43ae9efd68c41a46c432c4b788"
+  },
+  {
+    "origem": "ordem_cursos_3s/maior_demanda2.out",
+    "destino": "2024_1/ordem_cursos/historico_total_nao_registrado_inicial3s_norel3s_viz10min/maior_demanda2/maior_demanda2.out",
+    "sha256": "f89709263e64f2546079730652709fba5797942b7cb4566a994676694b1eb689"
+  },
+  {
+    "origem": "ordem_cursos_3s/historico_maior_demanda2.csv",
+    "destino": "2024_1/ordem_cursos/historico_total_nao_registrado_inicial3s_norel3s_viz10min/maior_demanda2/historico_maior_demanda2.csv",
+    "sha256": "4aa03a49c7b2f2f69e43d590e5d25683247952c68832a89b6d04e6e51616591f"
+  },
+  {
+    "origem": "ordem_cursos_3s/historico_maior_demanda2.json",
+    "destino": "2024_1/ordem_cursos/historico_total_nao_registrado_inicial3s_norel3s_viz10min/maior_demanda2/historico_maior_demanda2.json",
+    "sha256": "b5179fcca761bdb72f6d26bd1a1cf5ba1cc28726f908e0d88a13af4bf7d79a21"
+  },
+  {
+    "origem": "ordem_cursos_3s/historico_maior_demanda.json",
+    "destino": "2024_1/ordem_cursos/historico_total_nao_registrado_inicial180s_norel180s_viz10min/maior_demanda/historico_maior_demanda.json",
+    "sha256": "76893142f7148b00c512e99f3c4d954f9a0e3e4bcd77f39b2fbac56fda232619"
+  },
+  {
+    "origem": "ordem_cursos_3s/maior_demanda.out",
+    "destino": "2024_1/ordem_cursos/historico_total_nao_registrado_inicial180s_norel180s_viz10min/maior_demanda/maior_demanda.out",
+    "sha256": "63ada5fd5898cadba1c87292e503e8b4582ec09c2a3fa44e94adde6268fba11d"
+  },
+  {
+    "origem": "ordem_cursos_3s/melhor_maior_demanda.sol",
+    "destino": "2024_1/ordem_cursos/historico_total_nao_registrado_inicial180s_norel180s_viz10min/maior_demanda/melhor_maior_demanda.sol",
+    "sha256": "de210cd5a5455f64fd550b173441933806e11631d5c808dcbee72df0274cbd90"
+  },
+  {
+    "origem": "ordem_cursos_3s/historico_maior_demanda.csv",
+    "destino": "2024_1/ordem_cursos/historico_total_nao_registrado_inicial180s_norel180s_viz10min/maior_demanda/historico_maior_demanda.csv",
+    "sha256": "35f18150b68846d8178246d92c5ef55ae4c1e9e73c834cce8a891bbc88be0ce9"
+  },
+  {
+    "origem": "2024_1/pli_4h/pli_base_4h.csv",
+    "destino": "2024_1/pli/total4h_base/pli_base_4h.csv",
+    "sha256": "6b53dbdca5df2479ef171a49ae2e468608b646601b0ca4747eeda2baf24f7750"
+  },
+  {
+    "origem": "2024_1/pli_4h/pli_base_4h.out",
+    "destino": "2024_1/pli/total4h_base/pli_base_4h.out",
+    "sha256": "73fd4b1ccd7f5f7769879112d4abbb71d46e66c94201a701130be584d41918e8"
+  },
+  {
+    "origem": "2024_1/pli_4h/pli_mipfocus_norel_4h.out",
+    "destino": "2024_1/pli/total4h_mipfocus1_norel5min/pli_mipfocus_norel_4h.out",
+    "sha256": "843679f69d406a9302b9c2de27e26d142ae1151968532e043748599ac678b785"
+  },
+  {
+    "origem": "2024_1/pli_4h/pli_mipfocus_norel_4h.csv",
+    "destino": "2024_1/pli/total4h_mipfocus1_norel5min/pli_mipfocus_norel_4h.csv",
+    "sha256": "7e9515c6dfe9464c99bca76723c3b93f89e2afd277d6a8cb8b063c0cd864905c"
+  },
+  {
+    "origem": "2024_1/pli_300s/solve_pli_300_norel_300.sol",
+    "destino": "2024_1/pli/total5min_mipfocus1_norel5min/solve_pli_300_norel_300.sol",
+    "sha256": "6645ef2ac7bf423c93076be0e7618dde6dfd7460a05dfd010e53a94f8b4fb190"
+  },
+  {
+    "origem": "2024_1/pli_300s/solve_pli_300_norel_300.out",
+    "destino": "2024_1/pli/total5min_mipfocus1_norel5min/solve_pli_300_norel_300.out",
+    "sha256": "7974fbc0ce25fc9c7ce74156fd115deb54e829362ec05f89e0ef2a31698da817"
+  },
+  {
+    "origem": "ordem_cursos_3min_4h/20260923_185530/maior_demanda.out",
+    "destino": "tentativas_com_erro/20260923_185530_bash_array_vazio/maior_demanda.out",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "origem": "ordem_cursos_3min_4h/20260923_185530/maior_demanda.status",
+    "destino": "tentativas_com_erro/20260923_185530_bash_array_vazio/maior_demanda.status",
+    "sha256": "65680a5965fab8abc49941dc8320ebbd720342a04394d10130273954734da526"
+  },
+  {
+    "origem": "resultados_gurobi_20260805_191345_2.csv",
+    "destino": "parametros_incompletos/exportacao_gurobi_20260805_191345/resultados_gurobi_20260805_191345_2.csv",
+    "sha256": "384eb59e1ca6489a616751f088a56300836c26f9a80f5bba9dc848cfeb0f2c8d"
+  }
+]

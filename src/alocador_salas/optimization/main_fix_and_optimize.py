@@ -18,6 +18,7 @@ from alocador_salas.optimization.lns_fix_and_optimize import (
     SolucaoX,
     Vizinhanca,
     cursos_da_instancia,
+    ordenar_cursos,
     salvar_historico_csv,
     salvar_solucao_x,
     solucao_melhorou,
@@ -103,6 +104,8 @@ def executar_passada_por_vizinhancas(
     resolver: Callable = resolver_modelo,
     tempo_fim_total: float | None = None,
     salvar_candidatos: bool = False,
+    ordem_cursos: str = "alfabetica",
+    seed_ordem_cursos: int | None = None,
 ) -> tuple[dict, list[dict]]:
     """Executa uma passada de fix-and-optimize sobre vizinhancas genericas."""
     solucao_x_atual = solucao_incumbente_x
@@ -186,6 +189,9 @@ def executar_passada_por_vizinhancas(
         if vizinhanca.tipo == "curso":
             resultado_candidato["curso_livre"] = vizinhanca.recurso
             registro["curso"] = vizinhanca.recurso
+            registro["ordem_cursos"] = ordem_cursos
+            registro["seed_ordem_cursos"] = seed_ordem_cursos
+            registro["posicao_ordem_curso"] = idx
         elif vizinhanca.tipo == "dia_turno":
             dia, turno = vizinhanca.recurso.split("_", maxsplit=1)
             registro["dia"] = int(dia)
@@ -209,10 +215,22 @@ def executar_passada_por_cursos(
     resolver: Callable = resolver_modelo,
     tempo_fim_total: float | None = None,
     salvar_candidatos: bool = False,
+    ordem_cursos: str = "alfabetica",
+    seed_ordem_cursos: int | None = None,
 ) -> tuple[dict, list[dict]]:
     """Executa uma passada usando vizinhancas formadas por curso."""
+    cursos_foram_informados = cursos is not None
     if cursos is None:
         cursos = cursos_da_instancia(instancia)
+    if ordem_cursos.replace("_", "-") == "alfabetica" and cursos_foram_informados:
+        cursos = list(cursos)
+    else:
+        cursos = ordenar_cursos(
+            cursos,
+            instancia.disciplinas,
+            criterio=ordem_cursos,
+            seed=seed_ordem_cursos,
+        )
     vizinhancas = [
         vizinhanca_por_curso(instancia.disciplinas, curso)
         for curso in cursos
@@ -230,6 +248,8 @@ def executar_passada_por_cursos(
         resolver=resolver,
         tempo_fim_total=tempo_fim_total,
         salvar_candidatos=salvar_candidatos,
+        ordem_cursos=ordem_cursos,
+        seed_ordem_cursos=seed_ordem_cursos,
     )
 
 
@@ -278,6 +298,8 @@ def executar_fix_and_optimize(
     apenas_uma_passada: bool = False,
     salvar_candidatos: bool = False,
     tipo_vizinhanca: str = "curso",
+    ordem_cursos: str = "alfabetica",
+    seed_ordem_cursos: int | None = None,
     carregar: Callable = carregar_instancia,
     construir: Callable = construir_modelo,
     preparar_modelo: Callable = preparar_modelo_para_vizinhanca,
@@ -290,6 +312,12 @@ def executar_fix_and_optimize(
         raise ValueError(
             f"Tipo de vizinhanca invalido: {tipo_vizinhanca}. "
             f"Esperado um dos valores {sorted(tipos_validos)}."
+        )
+    criterios_ordem_validos = {"alfabetica", "maior-demanda", "maior_demanda", "aleatoria"}
+    if ordem_cursos not in criterios_ordem_validos:
+        raise ValueError(
+            f"Criterio de ordenacao de cursos invalido: {ordem_cursos}. "
+            f"Esperado um dos valores {sorted(criterios_ordem_validos)}."
         )
 
     t_inicio_total = time.time()
@@ -364,6 +392,8 @@ def executar_fix_and_optimize(
                 if tipo_passada == "curso":
                     incumbente_passada, hist_passada = executar_passada_por_cursos(
                         cursos=list(cursos),
+                        ordem_cursos=ordem_cursos,
+                        seed_ordem_cursos=seed_ordem_cursos,
                         **argumentos_passada,
                     )
                 else:
@@ -430,6 +460,8 @@ def executar_fix_and_optimize(
         "arquivo_melhor_solucao": str(caminho_melhor),
         "arquivo_log_csv": arquivo_log_csv,
         "arquivo_log_json": arquivo_log_json,
+        "ordem_cursos": ordem_cursos,
+        "seed_ordem_cursos": seed_ordem_cursos,
         "historico": historico_total,
     }
 
@@ -462,6 +494,18 @@ def main() -> dict:
             "(curso seguido de dia/turno quando houver estagnacao)."
         ),
     )
+    parser.add_argument(
+        "--ordem-cursos",
+        choices=["alfabetica", "maior-demanda", "aleatoria"],
+        default="alfabetica",
+        help="Define a ordem das vizinhancas por curso.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Seed usada quando --ordem-cursos aleatoria.",
+    )
     parser.add_argument("--log-csv", default=ARQUIVO_HISTORICO_CSV_PADRAO)
     parser.add_argument("--log-json", default=ARQUIVO_HISTORICO_JSON_PADRAO)
     parser.add_argument(
@@ -485,6 +529,8 @@ def main() -> dict:
         apenas_uma_passada=args.apenas_uma_passada,
         salvar_candidatos=args.salvar_candidatos,
         tipo_vizinhanca=args.tipo_vizinhanca,
+        ordem_cursos=args.ordem_cursos,
+        seed_ordem_cursos=args.seed,
     )
     print("RESULTADO_JSON=" + json.dumps(resultado, ensure_ascii=False, sort_keys=True))
     return resultado

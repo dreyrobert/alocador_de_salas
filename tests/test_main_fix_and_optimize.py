@@ -178,6 +178,50 @@ class TestMainFixAndOptimize(unittest.TestCase):
                 {("D1", "101-A", "Horario_2_1"): 1},
             )
 
+    def test_executar_passada_por_cursos_respeita_ordem_e_loga_posicao(self):
+        disciplinas = {
+            "D1": DisciplinaFake("CC", 1, 30, ["Horario_2_1"]),
+            "D2": DisciplinaFake("CC", 3, 25, ["Horario_2_1"]),
+            "D3": DisciplinaFake("ADM", 1, 80, ["Horario_2_1"]),
+        }
+        instancia = InstanciaFake(disciplinas)
+        instancia.cursos = {"CC": object(), "ADM": object()}
+        chamadas = []
+
+        def resolver_fake(modelo, parametros_gurobi=None, arquivo_solucao=None):
+            curso = ["CC", "ADM"][len(chamadas)]
+            chamadas.append(curso)
+            return {
+                "status_nome": "OPTIMAL",
+                "solucoes": 1,
+                "objetivo": 200.0,
+                "arquivo_solucao": arquivo_solucao,
+                "solucao_x": {("D1", "101-A", "Horario_2_1"): 1},
+                "lns": {"variaveis_x_livres": 5, "variaveis_x_fixadas": 95},
+            }
+
+        _, historico = executar_passada_por_cursos(
+            solucao_incumbente_x={("D1", "101-A", "Horario_2_1"): 1},
+            instancia=instancia,
+            modelo_alocacao="modelo",
+            tempo_subproblema=10,
+            objetivo_incumbente_inicial=200.0,
+            preparar_modelo=lambda modelo, **kwargs: None,
+            resolver=resolver_fake,
+            ordem_cursos="maior-demanda",
+            seed_ordem_cursos=42,
+        )
+
+        self.assertEqual(chamadas, ["CC", "ADM"])
+        self.assertEqual([registro["curso"] for registro in historico], ["CC", "ADM"])
+        self.assertEqual([registro["posicao_ordem_curso"] for registro in historico], [1, 2])
+        self.assertTrue(
+            all(registro["ordem_cursos"] == "maior-demanda" for registro in historico)
+        )
+        self.assertTrue(
+            all(registro["seed_ordem_cursos"] == 42 for registro in historico)
+        )
+
     def test_executar_passada_por_cursos_pode_salvar_candidatos_para_debug(self):
         disciplinas = {
             "D1": DisciplinaFake("CC", 1, 30, ["Horario_2_1"]),

@@ -15,6 +15,7 @@ from alocador_salas.optimization.lns_fix_and_optimize import (
     extrair_solucao_x,
     fixar_fora_da_vizinhanca_x,
     liberar_fixacoes_x,
+    ordenar_cursos,
     parse_objetivo_sol,
     parse_solucao_x,
     preparar_fixacao_vizinhanca_x,
@@ -358,6 +359,43 @@ class TestLnsFixAndOptimize(unittest.TestCase):
             cursos = {"MED": object(), "CC": object(), "ADM": object()}
 
         self.assertEqual(cursos_da_instancia(InstanciaComCursos()), ["ADM", "CC", "MED"])
+
+    def test_ordenar_cursos_alfabetica_preserva_baseline(self):
+        cursos = ["MED", "CC", "ADM"]
+
+        self.assertEqual(ordenar_cursos(cursos, {}, "alfabetica"), ["ADM", "CC", "MED"])
+
+    def test_ordenar_cursos_maior_demanda_usa_qtd_disciplinas_e_alunos(self):
+        disciplinas = {
+            "D1": DisciplinaFake("CC", 1),
+            "D2": DisciplinaFake("CC", 3),
+            "D3": DisciplinaFake("ADM", 1),
+            "D4": DisciplinaFake("MED", 1),
+            "D5": DisciplinaFake("MED", 2),
+        }
+        disciplinas["D1"].alunos = 30
+        disciplinas["D2"].alunos = 20
+        disciplinas["D3"].alunos = 80
+        disciplinas["D4"].alunos = 40
+        disciplinas["D5"].alunos = 50
+
+        self.assertEqual(
+            ordenar_cursos(["ADM", "CC", "MED"], disciplinas, "maior-demanda"),
+            ["MED", "CC", "ADM"],
+        )
+
+    def test_ordenar_cursos_aleatoria_e_reprodutivel_com_seed(self):
+        cursos = ["ADM", "CC", "MED", "MAT"]
+
+        ordem_1 = ordenar_cursos(cursos, {}, "aleatoria", seed=42)
+        ordem_2 = ordenar_cursos(reversed(cursos), {}, "aleatoria", seed=42)
+
+        self.assertEqual(ordem_1, ordem_2)
+        self.assertEqual(sorted(ordem_1), ["ADM", "CC", "MAT", "MED"])
+
+    def test_ordenar_cursos_aleatoria_exige_seed(self):
+        with self.assertRaisesRegex(ValueError, "exige seed"):
+            ordenar_cursos(["ADM", "CC"], {}, "aleatoria")
 
     def test_salvar_historico_csv_grava_arquivo(self):
         historico = [

@@ -32,6 +32,8 @@ MIP start e fixa somente as variaveis fora da vizinhanca corrente.
 
 ## `experimentos/`
 
+Consulte o [índice dos experimentos](experimentos/README.md) para localizar as rodadas pelos parâmetros.
+
 Resultados de rodadas comparativas ou execucoes nomeadas. Quando o experimento
 for especifico de um semestre, use uma subpasta, por exemplo `2024_1/`.
 
