@@ -25,6 +25,8 @@ from alocador_salas.optimization.lns_fix_and_optimize import (
     vizinhanca_por_curso,
     vizinhanca_por_dia_turno,
     vizinhancas_por_dia_turno,
+    vizinhancas_por_dia_turno_curso,
+    vizinhancas_por_pares_cursos,
 )
 
 
@@ -50,6 +52,22 @@ class VarFake:
 
 
 class TestLnsFixAndOptimize(unittest.TestCase):
+    def test_pares_cursos_combinam_todas_disciplinas_sem_repetir_invertidos(self):
+        disciplinas = {
+            "D1": DisciplinaFake("CC", 1),
+            "D2": DisciplinaFake("CC", 2),
+            "D3": DisciplinaFake("ADM", 1),
+            "D4": DisciplinaFake("ENF", 1),
+        }
+        pares = vizinhancas_por_pares_cursos(disciplinas, ["CC", "ADM", "ENF"])
+        self.assertEqual([v.cursos for v in pares], [("CC", "ADM"), ("CC", "ENF"), ("ADM", "ENF")])
+        self.assertEqual(
+            [v.disciplinas_liberadas for v in pares],
+            [{"D1", "D2", "D3"}, {"D1", "D2", "D4"}, {"D3", "D4"}],
+        )
+        for cursos in ([], ["CC"], ["CC", "CC"]):
+            self.assertEqual(vizinhancas_por_pares_cursos(disciplinas, cursos), [])
+
     def test_parse_solucao_x_le_variaveis_do_arquivo_sol(self):
         conteudo = "\n".join(
             [
@@ -220,6 +238,34 @@ class TestLnsFixAndOptimize(unittest.TestCase):
 
     def test_nao_gera_vizinhancas_dia_turno_para_instancia_vazia(self):
         self.assertEqual(vizinhancas_por_dia_turno({}), [])
+
+    def test_dia_turno_curso_une_curso_inteiro_e_periodo_em_ordem(self):
+        disciplinas = {
+            "C1": DisciplinaFake("CC", 1, {"a": Horario(2, 1)}),
+            "C2": DisciplinaFake("CC", 1, {"a": Horario(3, 8)}),
+            "A1": DisciplinaFake("ADM", 1, {
+                "a": Horario(2, 1), "b": Horario(4, 13),
+            }),
+            "A2": DisciplinaFake("ADM", 1, {"a": Horario(2, 8)}),
+            "M1": DisciplinaFake("MAT", 1, {"a": Horario(7, 1)}),
+        }
+        vizinhancas = vizinhancas_por_dia_turno_curso(disciplinas)
+        self.assertEqual([v.recurso for v in vizinhancas], [
+            "2_M_ADM", "2_M_CC", "2_T_ADM", "3_T_CC", "4_N_ADM", "7_M_MAT",
+        ])
+        self.assertEqual(vizinhancas[0].disciplinas_liberadas, {"C1", "A1", "A2"})
+        self.assertEqual(vizinhancas[1].disciplinas_liberadas, {"C1", "C2", "A1"})
+        # Todas as aulas de A1 ficam livres, inclusive a de quarta a noite.
+        chaves = [(codigo, "S1", horario) for codigo, d in disciplinas.items()
+                  for horario in d.horarios]
+        variaveis = {chave: VarFake() for chave in chaves}
+        fixar_fora_da_vizinhanca_x(
+            variaveis, {chave: 1 for chave in chaves},
+            set(vizinhancas[1].disciplinas_liberadas),
+        )
+        self.assertIsNone(variaveis[("A1", "S1", "b")].LB)
+        self.assertEqual(variaveis[("M1", "S1", "a")].LB, 1)
+        self.assertEqual(vizinhancas_por_dia_turno_curso({}), [])
 
     def test_aplica_start_e_fixa_variaveis_fora_da_vizinhanca(self):
         x_vars = {

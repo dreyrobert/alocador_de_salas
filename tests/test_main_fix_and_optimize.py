@@ -1,7 +1,10 @@
+import csv
+import json
 import tempfile
 import unittest
 import time
 from pathlib import Path
+from unittest.mock import patch
 
 from alocador_salas.domain.horario import Horario
 from alocador_salas.optimization.lns_fix_and_optimize import Vizinhanca
@@ -54,6 +57,96 @@ class DisciplinaFake:
 
 
 class TestMainFixAndOptimize(unittest.TestCase):
+    def executar_curso_pares_fake(self, objetivos, **opcoes):
+        instancia = InstanciaFake({
+            "A1": DisciplinaFake("ADM", 1, 30, ["Horario_2_1"]),
+            "C1": DisciplinaFake("CC", 1, 30, ["Horario_2_1"]),
+            "C2": DisciplinaFake("CC", 2, 30, ["Horario_3_1"]),
+            "E1": DisciplinaFake("ENF", 1, 30, ["Horario_2_1"]),
+        })
+        instancia.cursos = {curso: object() for curso in ("ADM", "CC", "ENF")}
+        objetivos = iter(objetivos)
+        preparacoes, solucoes, limites = [], [], []
+        relogio = [0.0]
+        encerrar_apos = opcoes.pop("encerrar_apos", None)
+
+        def resolver_fake(modelo, parametros_gurobi=None, arquivo_solucao=None):
+            objetivo = next(objetivos)
+            solucao = {("A1", f"sala_{len(solucoes)}", "Horario_2_1"): 1}
+            solucoes.append(solucao)
+            limites.append(parametros_gurobi["TimeLimit"])
+            if encerrar_apos == len(solucoes):
+                relogio[0] = 11.0
+            return {"status_nome": "OPTIMAL", "solucoes": 1,
+                    "objetivo": objetivo, "solucao_x": solucao}
+
+        with tempfile.TemporaryDirectory() as temp_dir, patch(
+            "alocador_salas.optimization.main_fix_and_optimize.time.time",
+            side_effect=lambda: relogio[0],
+        ):
+            resultado = executar_fix_and_optimize(
+                tipo_vizinhanca="curso_pares",
+                arquivo_melhor_solucao=str(Path(temp_dir) / "melhor.sol"),
+                arquivo_log_csv=str(Path(temp_dir) / "log.csv"),
+                arquivo_log_json=str(Path(temp_dir) / "log.json"),
+                carregar=lambda *args: instancia,
+                construir=lambda inst: "modelo",
+                preparar_modelo=lambda modelo, **kwargs: preparacoes.append(kwargs),
+                liberar_modelo=lambda modelo: None,
+                resolver=resolver_fake,
+                **opcoes,
+            )
+            with (Path(temp_dir) / "log.csv").open() as arquivo:
+                registros_csv = list(csv.DictReader(arquivo))
+            self.assertEqual(len(registros_csv), len(resultado["historico"]))
+            for registro in registros_csv:
+                if registro["vizinhanca"] == "par_cursos":
+                    self.assertTrue(registro["curso_a"])
+                    self.assertTrue(registro["curso_b"])
+            dados = json.loads((Path(temp_dir) / "log.json").read_text())
+            self.assertEqual(dados["historico"], resultado["historico"])
+        return resultado, preparacoes, solucoes, limites
+
+    def test_curso_pares_so_transita_apos_passada_inteira_sem_melhoria(self):
+        resultado, preparacoes, solucoes, _ = self.executar_curso_pares_fake([
+            100, 100, 90, 90, 90, 90, 80, 80, 80, 80, 70, 75, 60,
+        ])
+        historico = resultado["historico"]
+        self.assertEqual([r["vizinhanca"] for r in historico], ["curso"] * 9 + ["par_cursos"] * 3)
+        self.assertEqual([r["passada"] for r in historico], [1] * 3 + [2] * 3 + [3] * 3 + [4] * 3)
+        self.assertEqual([r["recurso"] for r in historico[-3:]], ["ADM+CC", "ADM+ENF", "CC+ENF"])
+        self.assertEqual([p["disciplinas_livres"] for p in preparacoes[-3:]],
+                         [{"A1", "C1", "C2"}, {"A1", "E1"}, {"C1", "C2", "E1"}])
+        self.assertIs(preparacoes[9]["solucao_incumbente_x"], solucoes[6])
+        self.assertIs(preparacoes[10]["solucao_incumbente_x"], solucoes[10])
+        self.assertIs(preparacoes[11]["solucao_incumbente_x"], solucoes[10])
+        self.assertEqual(resultado["objetivo_final"], 60)
+        self.assertEqual(resultado["passadas_executadas"], 4)
+
+    def test_curso_pares_pode_transitar_apos_primeira_passada(self):
+        resultado, _, _, _ = self.executar_curso_pares_fake([100] * 7)
+        self.assertEqual([r["vizinhanca"] for r in resultado["historico"]], ["curso"] * 3 + ["par_cursos"] * 3)
+
+    def test_curso_pares_respeita_ordem_configurada(self):
+        resultado, _, _, _ = self.executar_curso_pares_fake([100] * 7, ordem_cursos="maior-demanda")
+        self.assertEqual([r["recurso"] for r in resultado["historico"]],
+                         ["CC", "ADM", "ENF", "CC+ADM", "CC+ENF", "ADM+ENF"])
+
+    def test_curso_pares_apenas_uma_passada_nao_inicia_pares(self):
+        resultado, _, _, _ = self.executar_curso_pares_fake([100] * 4, apenas_uma_passada=True)
+        self.assertEqual(resultado["passadas_executadas"], 1)
+        self.assertTrue(all(r["vizinhanca"] == "curso" for r in resultado["historico"]))
+
+    def test_curso_pares_respeita_tempo_total_nas_duas_fases(self):
+        for quantidade in (2, 5):
+            with self.subTest(chamadas=quantidade):
+                resultado, _, _, limites = self.executar_curso_pares_fake(
+                    [100] * quantidade, encerrar_apos=quantidade,
+                    tempo_total_maximo=10, tempo_subproblema=60,
+                )
+                self.assertEqual(resultado["total_iteracoes"], quantidade - 1)
+                self.assertTrue(all(limite == 10 for limite in limites[1:]))
+
     def test_parametros_primeira_solucao_usa_limites_de_300s_por_padrao(self):
         self.assertEqual(
             parametros_primeira_solucao(),
@@ -546,6 +639,75 @@ class TestMainFixAndOptimize(unittest.TestCase):
             )
         )
 
+    def test_dia_turno_curso_executa_unioes_e_atualiza_incumbente(self):
+        instancia = InstanciaFake({
+            "C1": DisciplinaFake("CC", 1, 30, {"a": Horario(2, 1)}),
+            "C2": DisciplinaFake("CC", 1, 30, {"a": Horario(3, 8)}),
+            "A1": DisciplinaFake("ADM", 1, 30, {
+                "a": Horario(2, 1), "b": Horario(4, 13),
+            }),
+        })
+        objetivos = iter([100, 90, 95, 80, 80])
+        preparacoes = []
+
+        def resolver_fake(modelo, **kwargs):
+            objetivo = next(objetivos)
+            return {"solucoes": 1, "objetivo": objetivo,
+                    "solucao_x": {("C1", "S1", "a"): objetivo},
+                    "status_nome": "OPTIMAL"}
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            resultado = executar_fix_and_optimize(
+                tipo_vizinhanca="dia_turno_curso",
+                apenas_uma_passada=True,
+                tempo_modelo_inicial=180,
+                tempo_heuristica_inicial=180,
+                tempo_subproblema=600,
+                tempo_total_maximo=14400,
+                ordem_cursos="aleatoria",
+                seed_ordem_cursos=42,
+                arquivo_melhor_solucao=str(Path(temp_dir) / "melhor.sol"),
+                arquivo_log_csv=str(Path(temp_dir) / "historico.csv"),
+                arquivo_log_json=str(Path(temp_dir) / "historico.json"),
+                carregar=lambda *args: instancia,
+                construir=lambda inst: "modelo",
+                preparar_modelo=lambda modelo, **kwargs: preparacoes.append(kwargs),
+                liberar_modelo=lambda modelo: None,
+                resolver=resolver_fake,
+            )
+            self.assertIn("dia,turno,curso", (Path(temp_dir) / "historico.csv").read_text())
+            dados = json.loads((Path(temp_dir) / "historico.json").read_text())
+            parametros = dados["parametros"]
+            self.assertEqual(dados["historico"], resultado["historico"])
+            self.assertEqual(parametros, resultado["parametros"])
+            self.assertEqual(parametros["tempo_modelo_inicial_s"], 180)
+            self.assertEqual(parametros["tempo_heuristica_inicial_s"], 180)
+            self.assertEqual(parametros["tempo_subproblema_s"], 600)
+            self.assertEqual(parametros["tempo_total_maximo_s"], 14400)
+            self.assertEqual(parametros["gurobi_inicial_NoRelHeurTime"], 180)
+            self.assertEqual(parametros["gurobi_subproblema_NoRelHeurTime"], 0)
+            self.assertEqual(parametros["ordem_cursos"], "alfabetica")
+            self.assertIsNone(parametros["seed_ordem_cursos"])
+            self.assertEqual(parametros["seed_ordem_cursos_solicitada"], 42)
+            with (Path(temp_dir) / "historico.csv").open() as arquivo:
+                linhas = list(csv.DictReader(arquivo))
+            self.assertEqual(len(linhas), 4)
+            for linha in linhas:
+                self.assertEqual(linha["parametro_tempo_total_maximo_s"], "14400")
+                self.assertEqual(linha["parametro_tipo_vizinhanca"], "dia_turno_curso")
+                self.assertEqual(linha["tipo_registro"], "iteracao")
+        self.assertEqual(resultado["objetivo_final"], 80)
+        self.assertEqual(resultado["melhorias_aceitas"], 2)
+        self.assertEqual([p["disciplinas_livres"] for p in preparacoes], [
+            {"A1", "C1"}, {"A1", "C1", "C2"}, {"C1", "C2"}, {"A1"},
+        ])
+        self.assertEqual([p["solucao_incumbente_x"][("C1", "S1", "a")]
+                          for p in preparacoes], [100, 90, 90, 80])
+        self.assertEqual([(r["dia"], r["turno"], r["curso"])
+                          for r in resultado["historico"]], [
+            (2, "M", "ADM"), (2, "M", "CC"), (3, "T", "CC"), (4, "N", "ADM"),
+        ])
+
     def test_executar_fix_and_optimize_rejeita_tipo_desconhecido(self):
         with self.assertRaisesRegex(ValueError, "Tipo de vizinhanca invalido"):
             executar_fix_and_optimize(tipo_vizinhanca="desconhecida")
@@ -569,8 +731,8 @@ class TestMainFixAndOptimize(unittest.TestCase):
 
             resultado = executar_fix_and_optimize_cursos(
                 arquivo_melhor_solucao=str(melhor_sol),
-                arquivo_log_csv="",
-                arquivo_log_json="",
+                arquivo_log_csv=str(Path(temp_dir) / "sem_solucao.csv"),
+                arquivo_log_json=str(Path(temp_dir) / "sem_solucao.json"),
                 carregar=lambda *args: instancia,
                 construir=lambda inst, **kwargs: "modelo",
                 liberar_modelo=lambda modelo: chamadas_liberar.append(modelo),
@@ -578,6 +740,14 @@ class TestMainFixAndOptimize(unittest.TestCase):
             )
 
             self.assertEqual(resultado["status"], "SEM_SOLUCAO_INICIAL")
+            dados = json.loads((Path(temp_dir) / "sem_solucao.json").read_text())
+            self.assertEqual(dados["historico"], [])
+            self.assertIsNone(dados["parametros"]["tempo_total_maximo_s"])
+            with (Path(temp_dir) / "sem_solucao.csv").open() as arquivo:
+                linhas = list(csv.DictReader(arquivo))
+            self.assertEqual(len(linhas), 1)
+            self.assertEqual(linhas[0]["tipo_registro"], "parametros")
+            self.assertEqual(linhas[0]["parametro_tipo_vizinhanca"], "curso")
             self.assertEqual(resultado["passadas_executadas"], 0)
             self.assertEqual(resultado["total_iteracoes"], 0)
             self.assertFalse(melhor_sol.exists())

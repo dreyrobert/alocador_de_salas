@@ -76,9 +76,40 @@ pela linha de comando:
 
 ```bash
 uv run alocador-salas-fixopt --tipo-vizinhanca curso
+uv run alocador-salas-fixopt --tipo-vizinhanca curso_pares
 uv run alocador-salas-fixopt --tipo-vizinhanca dia_turno
+uv run alocador-salas-fixopt --tipo-vizinhanca dia_turno_curso
 uv run alocador-salas-fixopt --tipo-vizinhanca hibrida
 ```
 
 No modo hibrido, a busca explora cursos ate uma passada sem melhoria, tenta as
 vizinhancas por dia e turno e volta aos cursos se encontrar uma nova incumbente.
+
+No modo `curso_pares`, as passadas individuais se repetem enquanto houver
+melhoria. Depois de uma passada individual inteira sem melhoria, executa uma
+unica passada com todos os pares de cursos e encerra. Cada par libera todas as
+disciplinas dos dois cursos e fixa as demais na melhor solucao atual. Os pares
+seguem `--ordem-cursos` e `--seed`, sem repetir pares invertidos: para A, B e C,
+a sequencia e A+B, A+C, B+C. Uma melhoria atualiza a incumbente em memoria antes
+do proximo par. O historico identifica `par_cursos`, `curso_a`, `curso_b` e
+`posicao_par`. O limite total pode interromper qualquer passada;
+`--apenas-uma-passada` executa somente a primeira passada individual.
+
+No modo `dia_turno_curso`, cada vizinhanca une todas as disciplinas do dia/turno
+com todas as disciplinas de um curso presente naquele periodo. As disciplinas
+sao liberadas por inteiro, incluindo aulas em outros dias e turnos. A passada
+percorre os dias e turnos em ordem cronologica e, dentro de cada periodo, os
+cursos em ordem alfabetica. Periodos vazios sao ignorados. `--ordem-cursos` e
+`--seed` se aplicam aos modos `curso`, `curso_pares` e `hibrida`; a nova vizinhanca usa ordem
+fixa. O historico registra dia, turno, curso, tamanhos, objetivos e tempos.
+
+Novas execucoes de Fix-and-Optimize salvam automaticamente os parametros usados:
+limites de tempo em segundos, tipo de vizinhanca, ordem e seed solicitadas e
+efetivas, opcoes de execucao, caminhos de entrada/saida e parametros Gurobi
+configurados para a solucao inicial e os subproblemas. O limite efetivo de cada
+subproblema continua na coluna `tempo_limite_subproblema_s` do historico.
+No CSV, as colunas `parametro_*` repetem a configuracao em cada iteracao; se nao
+houver iteracoes, uma linha `tipo_registro=parametros` preserva a configuracao.
+O JSON agora e um objeto com `versao_formato: 2`, `parametros` e `historico`
+(a lista de iteracoes antes salva diretamente na raiz). Arquivos antigos nao
+sao alterados.

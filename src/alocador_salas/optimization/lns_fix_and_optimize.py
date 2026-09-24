@@ -11,6 +11,7 @@ import csv
 import random
 import re
 from dataclasses import dataclass
+from itertools import combinations
 from pathlib import Path
 from typing import Iterable
 
@@ -39,6 +40,7 @@ class Vizinhanca:
     recurso: str
     disciplinas_liberadas: frozenset[str]
     justificativa: str = ""
+    cursos: tuple[str, ...] = ()
 
 
 def parse_solucao_x(caminho_solucao: str | Path) -> SolucaoX:
@@ -118,6 +120,26 @@ def vizinhanca_por_curso(disciplinas, curso: str) -> Vizinhanca:
     )
 
 
+def vizinhancas_por_pares_cursos(disciplinas, cursos: Iterable[str]) -> list[Vizinhanca]:
+    """Combina cada par uma vez, preservando a ordem recebida dos cursos."""
+    disciplinas_por_curso = {
+        curso: disciplinas_do_curso(disciplinas, curso)
+        for curso in cursos
+    }
+    return [
+        Vizinhanca(
+            tipo="par_cursos",
+            recurso=f"{curso_a}+{curso_b}",
+            disciplinas_liberadas=frozenset(
+                disciplinas_por_curso[curso_a] | disciplinas_por_curso[curso_b]
+            ),
+            cursos=(curso_a, curso_b),
+            justificativa="Libera todas as disciplinas de dois cursos juntos.",
+        )
+        for curso_a, curso_b in combinations(disciplinas_por_curso, 2)
+    ]
+
+
 def disciplinas_do_dia_turno(
     disciplinas,
     dia: int,
@@ -169,6 +191,33 @@ def vizinhancas_por_dia_turno(disciplinas) -> list[Vizinhanca]:
             if vizinhanca.disciplinas_liberadas:
                 vizinhancas.append(vizinhanca)
 
+    return vizinhancas
+
+
+def vizinhancas_por_dia_turno_curso(disciplinas) -> list[Vizinhanca]:
+    """Une cada dia/turno ao curso inteiro, para os cursos presentes no periodo.
+
+    Percorre dias e turnos em ordem cronologica e cursos em ordem alfabetica.
+    As disciplinas selecionadas ficam livres em todos os seus horarios.
+    """
+    vizinhancas: list[Vizinhanca] = []
+    for periodo in vizinhancas_por_dia_turno(disciplinas):
+        cursos = sorted({
+            disciplinas[codigo].curso for codigo in periodo.disciplinas_liberadas
+        })
+        for curso in cursos:
+            vizinhancas.append(Vizinhanca(
+                tipo="dia_turno_curso",
+                recurso=f"{periodo.recurso}_{curso}",
+                disciplinas_liberadas=frozenset(
+                    periodo.disciplinas_liberadas
+                    | disciplinas_do_curso(disciplinas, curso)
+                ),
+                justificativa=(
+                    "Libera disciplinas inteiras do dia/turno e do curso, "
+                    "incluindo suas aulas nos demais periodos da semana."
+                ),
+            ))
     return vizinhancas
 
 
@@ -344,10 +393,22 @@ def ordenar_cursos(
     )
 
 
-def salvar_historico_csv(historico: list[dict], caminho_csv: str | Path) -> None:
-    """Salva o historico da busca local em CSV."""
+def salvar_historico_csv(
+    historico: list[dict], caminho_csv: str | Path, parametros: dict | None = None,
+) -> None:
+    """Salva o historico e, quando informados, os parametros em cada linha.
+
+    Sem iteracoes, grava uma linha de parametros identificada explicitamente.
+    """
     caminho = Path(caminho_csv)
     caminho.parent.mkdir(parents=True, exist_ok=True)
+
+    if parametros is not None:
+        colunas_parametros = {f"parametro_{nome}": valor for nome, valor in parametros.items()}
+        historico = [
+            {**registro, "tipo_registro": "iteracao", **colunas_parametros}
+            for registro in historico
+        ] or [{"tipo_registro": "parametros", **colunas_parametros}]
 
     campos: list[str] = []
     for registro in historico:

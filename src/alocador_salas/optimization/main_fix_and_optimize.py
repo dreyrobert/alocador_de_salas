@@ -24,6 +24,8 @@ from alocador_salas.optimization.lns_fix_and_optimize import (
     solucao_melhorou,
     vizinhanca_por_curso,
     vizinhancas_por_dia_turno,
+    vizinhancas_por_dia_turno_curso,
+    vizinhancas_por_pares_cursos,
 )
 
 ARQUIVO_HORARIOS_PADRAO = "./dados/2024_1/horarios_2024_1.xlsx"
@@ -192,10 +194,21 @@ def executar_passada_por_vizinhancas(
             registro["ordem_cursos"] = ordem_cursos
             registro["seed_ordem_cursos"] = seed_ordem_cursos
             registro["posicao_ordem_curso"] = idx
+        elif vizinhanca.tipo == "par_cursos":
+            registro["curso_a"], registro["curso_b"] = vizinhanca.cursos
+            registro["ordem_cursos"] = ordem_cursos
+            registro["seed_ordem_cursos"] = seed_ordem_cursos
+            registro["posicao_par"] = idx
         elif vizinhanca.tipo == "dia_turno":
             dia, turno = vizinhanca.recurso.split("_", maxsplit=1)
             registro["dia"] = int(dia)
             registro["turno"] = turno
+        elif vizinhanca.tipo == "dia_turno_curso":
+            dia, turno, curso = vizinhanca.recurso.split("_", maxsplit=2)
+            registro["dia"] = int(dia)
+            registro["turno"] = turno
+            registro["curso"] = curso
+            registro["ordem_cursos"] = "alfabetica"
         historico_passada.append(registro)
 
     return incumbente_atual, historico_passada
@@ -306,8 +319,8 @@ def executar_fix_and_optimize(
     liberar_modelo: Callable = liberar_fixacoes_modelo,
     resolver: Callable = resolver_modelo,
 ) -> dict:
-    """Executa o fix-and-optimize por curso, dia/turno ou de forma hibrida."""
-    tipos_validos = {"curso", "dia_turno", "hibrida"}
+    """Executa fix-and-optimize com o tipo de vizinhanca selecionado."""
+    tipos_validos = {"curso", "curso_pares", "dia_turno", "dia_turno_curso", "hibrida"}
     if tipo_vizinhanca not in tipos_validos:
         raise ValueError(
             f"Tipo de vizinhanca invalido: {tipo_vizinhanca}. "
@@ -321,6 +334,41 @@ def executar_fix_and_optimize(
         )
 
     t_inicio_total = time.time()
+    parametros_experimento = {
+        "tipo_vizinhanca": tipo_vizinhanca,
+        "tempo_modelo_inicial_s": tempo_modelo_inicial,
+        "tempo_heuristica_inicial_s": tempo_heuristica_inicial,
+        "tempo_subproblema_s": tempo_subproblema,
+        "tempo_total_maximo_s": tempo_total_maximo,
+        "apenas_uma_passada": apenas_uma_passada,
+        "salvar_candidatos": salvar_candidatos,
+        "ordem_cursos_solicitada": ordem_cursos,
+        "seed_ordem_cursos_solicitada": seed_ordem_cursos,
+        "ordem_cursos": (
+            "alfabetica" if tipo_vizinhanca == "dia_turno_curso"
+            else ordem_cursos.replace("_", "-") if tipo_vizinhanca != "dia_turno"
+            else None
+        ),
+        "seed_ordem_cursos": (
+            seed_ordem_cursos
+            if tipo_vizinhanca in {"curso", "curso_pares", "hibrida"} and ordem_cursos == "aleatoria"
+            else None
+        ),
+        "arquivo_horarios": str(arquivo_horarios),
+        "arquivo_salas": str(arquivo_salas),
+        "arquivo_salas_preferenciais": str(arquivo_salas_preferenciais),
+        "diretorio_execucao": str(Path.cwd()),
+        "arquivo_melhor_solucao": str(arquivo_melhor_solucao),
+        "arquivo_log_csv": str(arquivo_log_csv),
+        "arquivo_log_json": str(arquivo_log_json),
+    }
+    for etapa_parametros, valores in (
+        ("gurobi_inicial", parametros_primeira_solucao(tempo_modelo_inicial, tempo_heuristica_inicial)),
+        ("gurobi_subproblema", parametros_subproblema(tempo_subproblema)),
+    ):
+        parametros_experimento.update({
+            f"{etapa_parametros}_{nome}": valor for nome, valor in valores.items()
+        })
     tempo_fim_total = (
         t_inicio_total + tempo_total_maximo
         if tempo_total_maximo is not None
@@ -370,7 +418,10 @@ def executar_fix_and_optimize(
             cursos = cursos_da_instancia(instancia)
             passada = 1
             ciclo = 1
-            tipo_passada = "curso" if tipo_vizinhanca == "hibrida" else tipo_vizinhanca
+            tipo_passada = (
+                "curso" if tipo_vizinhanca in {"hibrida", "curso_pares"}
+                else tipo_vizinhanca
+            )
 
             while incumbente_atual.get("solucao_x") is not None:
                 if tempo_total_maximo and (time.time() - t_inicio_total) >= tempo_total_maximo:
@@ -396,6 +447,26 @@ def executar_fix_and_optimize(
                         seed_ordem_cursos=seed_ordem_cursos,
                         **argumentos_passada,
                     )
+                elif tipo_passada == "par_cursos":
+                    argumentos_passada.pop("instancia")
+                    incumbente_passada, hist_passada = executar_passada_por_vizinhancas(
+                        vizinhancas=vizinhancas_por_pares_cursos(
+                            instancia.disciplinas,
+                            ordenar_cursos(
+                                cursos, instancia.disciplinas,
+                                criterio=ordem_cursos, seed=seed_ordem_cursos,
+                            ),
+                        ),
+                        ordem_cursos=ordem_cursos,
+                        seed_ordem_cursos=seed_ordem_cursos,
+                        **argumentos_passada,
+                    )
+                elif tipo_passada == "dia_turno_curso":
+                    argumentos_passada.pop("instancia")
+                    incumbente_passada, hist_passada = executar_passada_por_vizinhancas(
+                        vizinhancas=vizinhancas_por_dia_turno_curso(instancia.disciplinas),
+                        **argumentos_passada,
+                    )
                 else:
                     incumbente_passada, hist_passada = executar_passada_por_dia_turno(
                         **argumentos_passada,
@@ -410,7 +481,15 @@ def executar_fix_and_optimize(
                 if apenas_uma_passada:
                     break
 
-                if tipo_vizinhanca == "hibrida":
+                if tipo_vizinhanca == "curso_pares":
+                    # Uma unica passada de pares apos a estagnacao individual.
+                    if tipo_passada == "par_cursos":
+                        break
+                    if melhorias_na_passada == 0:
+                        if len(cursos) < 2:
+                            break
+                        tipo_passada = "par_cursos"
+                elif tipo_vizinhanca == "hibrida":
                     if tipo_passada == "curso" and melhorias_na_passada == 0:
                         tipo_passada = "dia_turno"
                     elif tipo_passada == "dia_turno" and melhorias_na_passada > 0:
@@ -431,12 +510,16 @@ def executar_fix_and_optimize(
         liberar_modelo(modelo_alocacao)
 
     if arquivo_log_csv:
-        salvar_historico_csv(historico_total, arquivo_log_csv)
+        salvar_historico_csv(historico_total, arquivo_log_csv, parametros_experimento)
 
     if arquivo_log_json:
         caminho_json = Path(arquivo_log_json)
         caminho_json.parent.mkdir(parents=True, exist_ok=True)
-        caminho_json.write_text(json.dumps(historico_total, indent=2, ensure_ascii=False), encoding="utf-8")
+        caminho_json.write_text(json.dumps({
+            "versao_formato": 2,
+            "parametros": parametros_experimento,
+            "historico": historico_total,
+        }, indent=2, ensure_ascii=False), encoding="utf-8")
 
     tempo_total_exec = round(time.time() - t_inicio_total, 2)
     ganho_absoluto = (obj_inicial - obj_final) if (obj_inicial is not None and obj_final is not None) else 0.0
@@ -460,9 +543,10 @@ def executar_fix_and_optimize(
         "arquivo_melhor_solucao": str(caminho_melhor),
         "arquivo_log_csv": arquivo_log_csv,
         "arquivo_log_json": arquivo_log_json,
-        "ordem_cursos": ordem_cursos,
-        "seed_ordem_cursos": seed_ordem_cursos,
+        "ordem_cursos": "alfabetica" if tipo_vizinhanca == "dia_turno_curso" else ordem_cursos,
+        "seed_ordem_cursos": None if tipo_vizinhanca == "dia_turno_curso" else seed_ordem_cursos,
         "historico": historico_total,
+        "parametros": parametros_experimento,
     }
 
 
@@ -487,10 +571,12 @@ def main() -> dict:
     parser.add_argument("--apenas-uma-passada", action="store_true")
     parser.add_argument(
         "--tipo-vizinhanca",
-        choices=["curso", "dia_turno", "hibrida"],
+        choices=["curso", "curso_pares", "dia_turno", "dia_turno_curso", "hibrida"],
         default="curso",
         help=(
-            "Escolhe vizinhancas por curso, por dia/turno ou busca hibrida "
+            "Escolhe vizinhancas por curso, curso_pares (cursos ate estagnar, "
+            "depois uma passada de todos os pares), por dia/turno, uniao dia/turno + curso "
+            "(cursos presentes no periodo, em ordem alfabetica) ou busca hibrida "
             "(curso seguido de dia/turno quando houver estagnacao)."
         ),
     )
@@ -498,7 +584,7 @@ def main() -> dict:
         "--ordem-cursos",
         choices=["alfabetica", "maior-demanda", "aleatoria"],
         default="alfabetica",
-        help="Define a ordem das vizinhancas por curso.",
+        help="Define a ordem por curso nos tipos curso, curso_pares e hibrida; dia_turno_curso usa ordem alfabetica.",
     )
     parser.add_argument(
         "--seed",
