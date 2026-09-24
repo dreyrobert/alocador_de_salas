@@ -64,6 +64,11 @@ class TestMainFixAndOptimize(unittest.TestCase):
             "C2": DisciplinaFake("CC", 2, 30, ["Horario_3_1"]),
             "E1": DisciplinaFake("ENF", 1, 30, ["Horario_2_1"]),
         })
+        for disciplina in instancia.disciplinas.values():
+            disciplina._horarios = {
+                chave: Horario(*map(int, chave.split("_")[1:]))
+                for chave in disciplina._horarios
+            }
         instancia.cursos = {curso: object() for curso in ("ADM", "CC", "ENF")}
         objetivos = iter(objetivos)
         preparacoes, solucoes, limites = [], [], []
@@ -85,7 +90,7 @@ class TestMainFixAndOptimize(unittest.TestCase):
             side_effect=lambda: relogio[0],
         ):
             resultado = executar_fix_and_optimize(
-                tipo_vizinhanca="curso_pares",
+                tipo_vizinhanca=opcoes.pop("tipo_vizinhanca", "curso_pares"),
                 arquivo_melhor_solucao=str(Path(temp_dir) / "melhor.sol"),
                 arquivo_log_csv=str(Path(temp_dir) / "log.csv"),
                 arquivo_log_json=str(Path(temp_dir) / "log.json"),
@@ -98,13 +103,19 @@ class TestMainFixAndOptimize(unittest.TestCase):
             )
             with (Path(temp_dir) / "log.csv").open() as arquivo:
                 registros_csv = list(csv.DictReader(arquivo))
-            self.assertEqual(len(registros_csv), len(resultado["historico"]))
+            self.assertEqual(len(registros_csv), max(1, len(resultado["historico"])))
             for registro in registros_csv:
-                if registro["vizinhanca"] == "par_cursos":
+                if registro.get("vizinhanca") == "par_cursos":
                     self.assertTrue(registro["curso_a"])
                     self.assertTrue(registro["curso_b"])
             dados = json.loads((Path(temp_dir) / "log.json").read_text())
             self.assertEqual(dados["historico"], resultado["historico"])
+            if "ciclos" in resultado:
+                self.assertEqual(dados["ciclos"], resultado["ciclos"])
+                self.assertEqual(dados["motivo_encerramento"], resultado["motivo_encerramento"])
+                for linha, registro in zip(registros_csv, resultado["historico"]):
+                    self.assertEqual(linha["ciclo_completo"], str(registro["ciclo_completo"]))
+                    self.assertEqual(linha["etapa_no_ciclo"], str(registro["etapa_no_ciclo"]))
         return resultado, preparacoes, solucoes, limites
 
     def test_curso_pares_so_transita_apos_passada_inteira_sem_melhoria(self):
@@ -146,6 +157,62 @@ class TestMainFixAndOptimize(unittest.TestCase):
                 )
                 self.assertEqual(resultado["total_iteracoes"], quantidade - 1)
                 self.assertTrue(all(limite == 10 for limite in limites[1:]))
+
+    def test_hibridas_executam_ciclo_sem_melhoria_nas_duas_ordens(self):
+        for modo, tipos in (
+            ("hibrida_dia_turno_curso_pares", ["dia_turno_curso"] * 4 + ["par_cursos"] * 3),
+            ("hibrida_pares_dia_turno_curso", ["par_cursos"] * 3 + ["dia_turno_curso"] * 4),
+        ):
+            with self.subTest(modo=modo):
+                r, _, _, _ = self.executar_curso_pares_fake([100] * 8, tipo_vizinhanca=modo)
+                self.assertEqual([h["vizinhanca"] for h in r["historico"]], tipos)
+                self.assertEqual(r["passadas_executadas"], 2)
+                self.assertEqual(r["motivo_encerramento"], "CICLO_SEM_MELHORIA")
+                self.assertEqual(r["ciclos"], [{"ciclo": 1, "completo": True, "melhorias": 0}])
+
+    def test_hibrida_repete_se_qualquer_etapa_melhora_e_transfere_incumbente(self):
+        for indice_melhoria in (1, 5):
+            with self.subTest(indice=indice_melhoria):
+                objetivos = [100] * indice_melhoria + [90] * (15 - indice_melhoria)
+                r, preparacoes, solucoes, _ = self.executar_curso_pares_fake(
+                    objetivos, tipo_vizinhanca="hibrida_dia_turno_curso_pares")
+                self.assertEqual(r["passadas_executadas"], 4)
+                self.assertEqual([c["melhorias"] for c in r["ciclos"]], [1, 0])
+                self.assertIs(preparacoes[7]["solucao_incumbente_x"], solucoes[indice_melhoria])
+                if indice_melhoria == 1:
+                    self.assertIs(preparacoes[4]["solucao_incumbente_x"], solucoes[1])
+
+    def test_hibrida_interrupcoes_registram_ciclo_incompleto(self):
+        for chamadas in (1, 2, 5, 6, 8):
+            with self.subTest(chamadas=chamadas):
+                r, _, _, _ = self.executar_curso_pares_fake(
+                    [100] * chamadas, tipo_vizinhanca="hibrida_dia_turno_curso_pares",
+                    tempo_total_maximo=10, encerrar_apos=chamadas)
+                self.assertEqual(r["motivo_encerramento"], "TEMPO_TOTAL")
+                self.assertEqual(r["parametros"]["ciclos_completos"], int(chamadas == 8))
+                if chamadas > 1:
+                    self.assertEqual(r["ciclos"][0]["completo"], chamadas == 8)
+                    self.assertTrue(all(h["ciclo_completo"] == (chamadas == 8) for h in r["historico"]))
+
+    def test_hibridas_apenas_uma_passada(self):
+        for modo, quantidade in (("hibrida_dia_turno_curso_pares", 5),
+                                 ("hibrida_pares_dia_turno_curso", 4)):
+            with self.subTest(modo=modo):
+                r, _, _, _ = self.executar_curso_pares_fake(
+                    [100] * quantidade, tipo_vizinhanca=modo, apenas_uma_passada=True)
+                self.assertEqual(r["passadas_executadas"], 1)
+                self.assertFalse(r["ciclos"][0]["completo"])
+                self.assertEqual(r["motivo_encerramento"], "APENAS_UMA_PASSADA")
+
+    def test_hibrida_ordem_e_seed_por_etapa(self):
+        r, _, _, _ = self.executar_curso_pares_fake(
+            [100] * 8, tipo_vizinhanca="hibrida_pares_dia_turno_curso",
+            ordem_cursos="aleatoria", seed_ordem_cursos=42)
+        self.assertEqual(r["parametros"]["etapa_1_seed"], 42)
+        self.assertIsNone(r["parametros"]["etapa_2_seed"])
+        for h in r["historico"]:
+            self.assertEqual(h["ordem_cursos"], "aleatoria" if h["vizinhanca"] == "par_cursos" else "alfabetica")
+            self.assertEqual(h["seed_ordem_cursos"], 42 if h["vizinhanca"] == "par_cursos" else None)
 
     def test_parametros_primeira_solucao_usa_limites_de_300s_por_padrao(self):
         self.assertEqual(

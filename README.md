@@ -113,3 +113,53 @@ houver iteracoes, uma linha `tipo_registro=parametros` preserva a configuracao.
 O JSON agora e um objeto com `versao_formato: 2`, `parametros` e `historico`
 (a lista de iteracoes antes salva diretamente na raiz). Arquivos antigos nao
 sao alterados.
+
+### Hibridizacao de dia/turno + curso com pares de cursos
+
+Os modos `hibrida_dia_turno_curso_pares` e `hibrida_pares_dia_turno_curso`
+executam uma passada completa de cada tipo, na ordem indicada pelo nome.
+A segunda etapa recebe a melhor solucao em memoria e acontece mesmo quando
+nao ha melhoria na primeira. Um novo ciclo comeca se qualquer etapa melhorar;
+um ciclo completo sem melhoria encerra a busca. O limite total pode interromper
+qualquer etapa. `--apenas-uma-passada` executa somente a primeira etapa,
+deixando o ciclo incompleto.
+
+A etapa de dia/turno + curso usa ordem cronologica e cursos em ordem alfabetica.
+A etapa de pares respeita `--ordem-cursos` e `--seed`. Os modos anteriores,
+inclusive `curso_pares` e `hibrida`, conservam suas regras de transicao.
+
+O historico inclui `etapa_no_ciclo`, `etapa_completa`, `ciclo_completo` e
+`motivo_encerramento`. A conclusao indica que todas as vizinhancas previstas
+foram processadas; nao exige que cada subproblema tenha sido provado otimo.
+O JSON inclui ainda `ciclos` (numero, conclusao e quantidade de melhorias),
+inclusive quando uma etapa nao possui vizinhancas. Os parametros registram a
+sequencia e a ordem/seed efetiva por etapa. Um limite atingido antes de iniciar
+a busca produz zero ciclos, com motivo `TEMPO_TOTAL`.
+
+Exemplo de execucao das duas ordens no macOS, com inicial de 3 minutos,
+subproblemas de ate 10 minutos e limite total de 4 horas por estrategia:
+
+```bash
+mkdir -p resultados/experimentos/2024_1/hibridas_dia_turno_curso_pares
+for modo in hibrida_dia_turno_curso_pares hibrida_pares_dia_turno_curso; do
+  caffeinate -i uv run alocador-salas-fixopt \
+    --tipo-vizinhanca "$modo" --ordem-cursos alfabetica \
+    --tempo-modelo 180 --tempo-heuristica 180 \
+    --tempo-subproblema 600 --tempo-total 14400 \
+    --salvar-solucao "resultados/experimentos/2024_1/hibridas_dia_turno_curso_pares/${modo}.sol" \
+    --log-csv "resultados/experimentos/2024_1/hibridas_dia_turno_curso_pares/${modo}.csv" \
+    --log-json "resultados/experimentos/2024_1/hibridas_dia_turno_curso_pares/${modo}.json" \
+    > "resultados/experimentos/2024_1/hibridas_dia_turno_curso_pares/${modo}.out" 2>&1
+done
+```
+
+Esses comandos geram uma solucao inicial em cada execucao. Limites iguais nao
+garantem a mesma solucao inicial, nem mesmo quando os objetivos coincidem.
+Portanto, servem para exploracao; uma comparacao controlada exige reutilizar
+exatamente a mesma `SolucaoX` e objetivo inicial. A CLI atual nao possui opcao
+para importar essa incumbente. Na API, o callback `resolver` permite devolver
+uma copia do mesmo resultado inicial na primeira chamada de cada execucao e
+encaminhar as chamadas seguintes para `resolver_modelo`. Ao comparar, registrar
+tambem o custo de gerar essa inicial e o orcamento destinado a busca.
+Comparar objetivo final, tempo, ciclos completos e ganho por etapa; destacar
+execucoes cujo limite impediu a segunda etapa de terminar.
