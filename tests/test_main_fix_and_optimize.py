@@ -58,18 +58,22 @@ class DisciplinaFake:
 
 class TestMainFixAndOptimize(unittest.TestCase):
     def executar_curso_pares_fake(self, objetivos, **opcoes):
-        instancia = InstanciaFake({
+        disciplinas = opcoes.pop("disciplinas", {
             "A1": DisciplinaFake("ADM", 1, 30, ["Horario_2_1"]),
             "C1": DisciplinaFake("CC", 1, 30, ["Horario_2_1"]),
             "C2": DisciplinaFake("CC", 2, 30, ["Horario_3_1"]),
             "E1": DisciplinaFake("ENF", 1, 30, ["Horario_2_1"]),
         })
+        instancia = InstanciaFake(disciplinas)
         for disciplina in instancia.disciplinas.values():
             disciplina._horarios = {
                 chave: Horario(*map(int, chave.split("_")[1:]))
                 for chave in disciplina._horarios
             }
-        instancia.cursos = {curso: object() for curso in ("ADM", "CC", "ENF")}
+        instancia.cursos = {
+            disciplina.curso: object()
+            for disciplina in instancia.disciplinas.values()
+        }
         objetivos = iter(objetivos)
         preparacoes, solucoes, limites = [], [], []
         relogio = [0.0]
@@ -120,19 +124,23 @@ class TestMainFixAndOptimize(unittest.TestCase):
 
     def test_curso_pares_so_transita_apos_passada_inteira_sem_melhoria(self):
         resultado, preparacoes, solucoes, _ = self.executar_curso_pares_fake([
-            100, 100, 90, 90, 90, 90, 80, 80, 80, 80, 70, 75, 60,
+            100, 100, 90, 90, 90, 90, 80, 80, 80, 80, 70, 75, 60, 60, 60, 60,
         ])
         historico = resultado["historico"]
-        self.assertEqual([r["vizinhanca"] for r in historico], ["curso"] * 9 + ["par_cursos"] * 3)
-        self.assertEqual([r["passada"] for r in historico], [1] * 3 + [2] * 3 + [3] * 3 + [4] * 3)
+        self.assertEqual([r["vizinhanca"] for r in historico], ["curso"] * 9 + ["par_cursos"] * 6)
+        self.assertEqual(
+            [r["passada"] for r in historico],
+            [1] * 3 + [2] * 3 + [3] * 3 + [4] * 3 + [5] * 3,
+        )
         self.assertEqual([r["recurso"] for r in historico[-3:]], ["ADM+CC", "ADM+ENF", "CC+ENF"])
         self.assertEqual([p["disciplinas_livres"] for p in preparacoes[-3:]],
                          [{"A1", "C1", "C2"}, {"A1", "E1"}, {"C1", "C2", "E1"}])
         self.assertIs(preparacoes[9]["solucao_incumbente_x"], solucoes[6])
         self.assertIs(preparacoes[10]["solucao_incumbente_x"], solucoes[10])
         self.assertIs(preparacoes[11]["solucao_incumbente_x"], solucoes[10])
+        self.assertIs(preparacoes[12]["solucao_incumbente_x"], solucoes[12])
         self.assertEqual(resultado["objetivo_final"], 60)
-        self.assertEqual(resultado["passadas_executadas"], 4)
+        self.assertEqual(resultado["passadas_executadas"], 5)
 
     def test_curso_pares_pode_transitar_apos_primeira_passada(self):
         resultado, _, _, _ = self.executar_curso_pares_fake([100] * 7)
@@ -158,6 +166,221 @@ class TestMainFixAndOptimize(unittest.TestCase):
                 self.assertEqual(resultado["total_iteracoes"], quantidade - 1)
                 self.assertTrue(all(limite == 10 for limite in limites[1:]))
 
+    def test_combinada_repete_passada_se_qualquer_componente_melhorar(self):
+        for indice_melhoria in (1, 4):
+            with self.subTest(indice_melhoria=indice_melhoria):
+                objetivos = (
+                    [100] * indice_melhoria
+                    + [90] * (15 - indice_melhoria)
+                )
+                r, preparacoes, solucoes, _ = self.executar_curso_pares_fake(
+                    objetivos,
+                    tipo_vizinhanca="combinada_cursos_exat_2_dia_turno_curso",
+                )
+
+                self.assertEqual(r["objetivo_final"], 90)
+                self.assertEqual(r["passadas_executadas"], 2)
+                self.assertEqual(r["motivo_encerramento"], "ESTAGNACAO")
+                self.assertEqual(
+                    [h["vizinhanca"] for h in r["historico"]],
+                    (["par_cursos"] * 3 + ["dia_turno_curso"] * 4) * 2,
+                )
+                self.assertEqual(
+                    [h["tipo_componente"] for h in r["historico"]],
+                    (["cursos_exat_2"] * 3 + ["dia_turno_curso"] * 4) * 2,
+                )
+                self.assertEqual(
+                    [h["posicao_na_passada"] for h in r["historico"]],
+                    list(range(1, 8)) * 2,
+                )
+                self.assertEqual(
+                    [h["posicao_no_componente"] for h in r["historico"]],
+                    ([1, 2, 3] + [1, 2, 3, 4]) * 2,
+                )
+                self.assertTrue(all(h["passada_completa"] for h in r["historico"]))
+                self.assertIs(
+                    preparacoes[indice_melhoria]["solucao_incumbente_x"],
+                    solucoes[indice_melhoria],
+                )
+                self.assertIs(
+                    preparacoes[7]["solucao_incumbente_x"],
+                    solucoes[indice_melhoria],
+                )
+                self.assertEqual(r["parametros"]["tipo_estrategia"], "combinada")
+                self.assertEqual(
+                    r["parametros"]["componentes"],
+                    "cursos_exat_2 -> dia_turno_curso",
+                )
+
+    def test_combinada_apenas_uma_passada_nao_repete(self):
+        r, _, _, _ = self.executar_curso_pares_fake(
+            [100, 90] + [90] * 6,
+            tipo_vizinhanca="combinada_cursos_exat_2_dia_turno_curso",
+            apenas_uma_passada=True,
+        )
+
+        self.assertEqual(r["passadas_executadas"], 1)
+        self.assertEqual(r["total_iteracoes"], 7)
+        self.assertEqual(r["motivo_encerramento"], "APENAS_UMA_PASSADA")
+
+    def test_combinada_tempo_total_marca_passada_incompleta(self):
+        r, _, _, _ = self.executar_curso_pares_fake(
+            [100, 90],
+            tipo_vizinhanca="combinada_cursos_exat_2_dia_turno_curso",
+            tempo_total_maximo=10,
+            encerrar_apos=2,
+        )
+
+        self.assertEqual(r["total_iteracoes"], 1)
+        self.assertEqual(r["motivo_encerramento"], "TEMPO_TOTAL")
+        self.assertFalse(r["historico"][0]["passada_completa"])
+
+    def test_combinada_sem_pares_executa_dia_turno_curso(self):
+        r, _, _, _ = self.executar_curso_pares_fake(
+            [100, 100],
+            tipo_vizinhanca="combinada_cursos_exat_2_dia_turno_curso",
+            disciplinas={
+                "A1": DisciplinaFake("ADM", 1, 30, ["Horario_2_1"]),
+            },
+        )
+
+        self.assertEqual(
+            [h["vizinhanca"] for h in r["historico"]],
+            ["dia_turno_curso"],
+        )
+        self.assertEqual(r["passadas_executadas"], 1)
+        self.assertEqual(r["motivo_encerramento"], "ESTAGNACAO")
+
+    def test_fluxo_progressivo_executa_cada_etapa_ate_estagnar(self):
+        objetivos = (
+            [100]
+            + [90] * 8
+            + [80] * 6
+            + [70] * 6
+        )
+        r, preparacoes, solucoes, _ = self.executar_curso_pares_fake(
+            objetivos,
+            tipo_vizinhanca="dia_turno_curso_cursos_progr_ate_2",
+        )
+
+        self.assertEqual(r["objetivo_final"], 70)
+        self.assertEqual(r["passadas_executadas"], 6)
+        self.assertEqual(r["motivo_encerramento"], "ESTAGNACAO")
+        self.assertEqual(
+            [h["vizinhanca"] for h in r["historico"]],
+            ["dia_turno_curso"] * 8 + ["curso"] * 6 + ["par_cursos"] * 6,
+        )
+        self.assertEqual(
+            [h["passada"] for h in r["historico"]],
+            [1] * 4 + [2] * 4 + [3] * 3 + [4] * 3 + [5] * 3 + [6] * 3,
+        )
+        self.assertEqual(
+            [h["passada_na_etapa"] for h in r["historico"]],
+            [1] * 4 + [2] * 4 + [1] * 3 + [2] * 3 + [1] * 3 + [2] * 3,
+        )
+        self.assertEqual(
+            [h["etapa_no_fluxo"] for h in r["historico"]],
+            [1] * 8 + [2] * 6 + [3] * 6,
+        )
+        self.assertIs(preparacoes[4]["solucao_incumbente_x"], solucoes[1])
+        self.assertIs(preparacoes[8]["solucao_incumbente_x"], solucoes[1])
+        self.assertIs(preparacoes[11]["solucao_incumbente_x"], solucoes[9])
+        self.assertIs(preparacoes[14]["solucao_incumbente_x"], solucoes[9])
+        self.assertIs(preparacoes[17]["solucao_incumbente_x"], solucoes[15])
+        self.assertEqual(
+            r["parametros"]["sequencia_etapas"],
+            "dia_turno_curso -> curso -> par_cursos",
+        )
+        self.assertEqual(r["parametros"]["tipo_sequencia"], "progressiva")
+        self.assertEqual(r["parametros"]["etapas_concluidas"], 3)
+
+    def test_fluxo_progressivo_inverso_executa_cursos_pares_e_dia_turno(self):
+        objetivos = [100] + [90] * 6 + [80] * 6 + [70] * 8
+        r, preparacoes, solucoes, _ = self.executar_curso_pares_fake(
+            objetivos,
+            tipo_vizinhanca="cursos_progr_ate_2_dia_turno_curso",
+        )
+
+        self.assertEqual(r["objetivo_final"], 70)
+        self.assertEqual(r["passadas_executadas"], 6)
+        self.assertEqual(r["motivo_encerramento"], "ESTAGNACAO")
+        self.assertEqual(
+            [h["vizinhanca"] for h in r["historico"]],
+            ["curso"] * 6 + ["par_cursos"] * 6 + ["dia_turno_curso"] * 8,
+        )
+        self.assertEqual(
+            [h["etapa_no_fluxo"] for h in r["historico"]],
+            [1] * 6 + [2] * 6 + [3] * 8,
+        )
+        self.assertEqual(
+            [h["passada_na_etapa"] for h in r["historico"]],
+            [1] * 3 + [2] * 3 + [1] * 3 + [2] * 3 + [1] * 4 + [2] * 4,
+        )
+        self.assertIs(preparacoes[3]["solucao_incumbente_x"], solucoes[1])
+        self.assertIs(preparacoes[6]["solucao_incumbente_x"], solucoes[1])
+        self.assertIs(preparacoes[9]["solucao_incumbente_x"], solucoes[7])
+        self.assertIs(preparacoes[12]["solucao_incumbente_x"], solucoes[7])
+        self.assertIs(preparacoes[16]["solucao_incumbente_x"], solucoes[13])
+        self.assertEqual(
+            r["parametros"]["sequencia_etapas"],
+            "curso -> par_cursos -> dia_turno_curso",
+        )
+        self.assertEqual(r["parametros"]["etapas_concluidas"], 3)
+
+    def test_fluxo_progressivo_apenas_uma_passada_nao_avanca(self):
+        r, _, _, _ = self.executar_curso_pares_fake(
+            [100] * 5,
+            tipo_vizinhanca="dia_turno_curso_cursos_progr_ate_2",
+            apenas_uma_passada=True,
+        )
+
+        self.assertEqual(r["passadas_executadas"], 1)
+        self.assertEqual(r["motivo_encerramento"], "APENAS_UMA_PASSADA")
+        self.assertTrue(all(h["vizinhanca"] == "dia_turno_curso" for h in r["historico"]))
+
+    def test_fluxo_progressivo_tempo_total_interrompe_passada(self):
+        r, _, _, _ = self.executar_curso_pares_fake(
+            [100, 90],
+            tipo_vizinhanca="dia_turno_curso_cursos_progr_ate_2",
+            tempo_total_maximo=10,
+            encerrar_apos=2,
+        )
+
+        self.assertEqual(r["total_iteracoes"], 1)
+        self.assertEqual(r["motivo_encerramento"], "TEMPO_TOTAL")
+        self.assertFalse(r["historico"][0]["etapa_completa"])
+
+    def test_fluxo_progressivo_sem_pares_conclui_a_terceira_etapa(self):
+        r, _, _, _ = self.executar_curso_pares_fake(
+            [100, 100, 100],
+            tipo_vizinhanca="dia_turno_curso_cursos_progr_ate_2",
+            disciplinas={
+                "A1": DisciplinaFake("ADM", 1, 30, ["Horario_2_1"]),
+            },
+        )
+
+        self.assertEqual(
+            [h["vizinhanca"] for h in r["historico"]],
+            ["dia_turno_curso", "curso"],
+        )
+        self.assertEqual(r["passadas_executadas"], 3)
+        self.assertEqual(r["parametros"]["etapas_concluidas"], 3)
+        self.assertEqual(r["motivo_encerramento"], "ESTAGNACAO")
+
+    def test_fluxo_progressivo_registra_ordem_e_seed_das_etapas_de_curso(self):
+        r, _, _, _ = self.executar_curso_pares_fake(
+            [100] * 11,
+            tipo_vizinhanca="dia_turno_curso_cursos_progr_ate_2",
+            ordem_cursos="aleatoria",
+            seed_ordem_cursos=42,
+        )
+
+        self.assertEqual(r["parametros"]["etapa_1_ordem_cursos"], "alfabetica")
+        self.assertIsNone(r["parametros"]["etapa_1_seed"])
+        self.assertEqual(r["parametros"]["etapa_2_ordem_cursos"], "aleatoria")
+        self.assertEqual(r["parametros"]["etapa_2_seed"], 42)
+        self.assertEqual(r["parametros"]["etapa_3_seed"], 42)
+
     def test_hibridas_executam_ciclo_sem_melhoria_nas_duas_ordens(self):
         for modo, tipos in (
             ("hibrida_dia_turno_curso_pares", ["dia_turno_curso"] * 4 + ["par_cursos"] * 3),
@@ -173,14 +396,32 @@ class TestMainFixAndOptimize(unittest.TestCase):
     def test_hibrida_repete_se_qualquer_etapa_melhora_e_transfere_incumbente(self):
         for indice_melhoria in (1, 5):
             with self.subTest(indice=indice_melhoria):
-                objetivos = [100] * indice_melhoria + [90] * (15 - indice_melhoria)
+                total_resultados = 18 if indice_melhoria == 5 else 15
+                objetivos = [100] * indice_melhoria + [90] * (total_resultados - indice_melhoria)
                 r, preparacoes, solucoes, _ = self.executar_curso_pares_fake(
                     objetivos, tipo_vizinhanca="hibrida_dia_turno_curso_pares")
-                self.assertEqual(r["passadas_executadas"], 4)
+                self.assertEqual(r["passadas_executadas"], 5 if indice_melhoria == 5 else 4)
                 self.assertEqual([c["melhorias"] for c in r["ciclos"]], [1, 0])
                 self.assertIs(preparacoes[7]["solucao_incumbente_x"], solucoes[indice_melhoria])
                 if indice_melhoria == 1:
                     self.assertIs(preparacoes[4]["solucao_incumbente_x"], solucoes[1])
+
+    def test_hibrida_iniciada_por_pares_repete_antes_de_avancar(self):
+        objetivos = [100, 90] + [90] * 16
+        r, preparacoes, solucoes, _ = self.executar_curso_pares_fake(
+            objetivos, tipo_vizinhanca="hibrida_pares_dia_turno_curso",
+        )
+
+        self.assertEqual(r["passadas_executadas"], 5)
+        self.assertEqual(
+            [h["vizinhanca"] for h in r["historico"]],
+            ["par_cursos"] * 6
+            + ["dia_turno_curso"] * 4
+            + ["par_cursos"] * 3
+            + ["dia_turno_curso"] * 4,
+        )
+        self.assertIs(preparacoes[3]["solucao_incumbente_x"], solucoes[1])
+        self.assertIs(preparacoes[6]["solucao_incumbente_x"], solucoes[1])
 
     def test_hibrida_interrupcoes_registram_ciclo_incompleto(self):
         for chamadas in (1, 2, 5, 6, 8):

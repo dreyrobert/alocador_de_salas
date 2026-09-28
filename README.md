@@ -87,7 +87,9 @@ vizinhancas por dia e turno e volta aos cursos se encontrar uma nova incumbente.
 
 No modo `curso_pares`, as passadas individuais se repetem enquanto houver
 melhoria. Depois de uma passada individual inteira sem melhoria, executa uma
-unica passada com todos os pares de cursos e encerra. Cada par libera todas as
+passada com todos os pares de cursos. As passadas de pares se repetem enquanto
+a passada anterior gerar alguma melhoria e encerram na primeira passada completa
+sem melhoria. Cada par libera todas as
 disciplinas dos dois cursos e fixa as demais na melhor solucao atual. Os pares
 seguem `--ordem-cursos` e `--seed`, sem repetir pares invertidos: para A, B e C,
 a sequencia e A+B, A+C, B+C. Uma melhoria atualiza a incumbente em memoria antes
@@ -114,10 +116,84 @@ O JSON agora e um objeto com `versao_formato: 2`, `parametros` e `historico`
 (a lista de iteracoes antes salva diretamente na raiz). Arquivos antigos nao
 sao alterados.
 
+### Passada combinada com pares e dia/turno + curso
+
+O modo `combinada_cursos_exat_2_dia_turno_curso` trata os dois tipos como
+componentes da mesma passada. Primeiro executa uma vez cada combinacao de
+exatamente dois cursos (`cursos_exat_2`), sem vizinhancas unitarias; depois
+executa uma vez cada `dia_turno_curso`. A incumbente e atualizada entre todas
+as vizinhancas. Se qualquer componente produzir melhoria, a passada combinada
+inteira e repetida. A primeira passada completa sem melhoria encerra a busca.
+
+`--ordem-cursos` e `--seed` controlam a ordem usada para formar os pares. O
+limite total pode interromper a passada, e `--apenas-uma-passada` impede sua
+repeticao mesmo que haja melhoria. O historico registra `tipo_componente`,
+`posicao_na_passada`, `posicao_no_componente` e `passada_completa`.
+
+```bash
+uv run alocador-salas-fixopt \
+  --tipo-vizinhanca combinada_cursos_exat_2_dia_turno_curso \
+  --ordem-cursos alfabetica \
+  --tempo-modelo 180 --tempo-heuristica 180 \
+  --tempo-subproblema 600 --tempo-total 14400 \
+  --salvar-solucao resultados/experimentos/combinada_exat_2_dia_turno/melhor.sol \
+  --log-csv resultados/experimentos/combinada_exat_2_dia_turno/historico.csv \
+  --log-json resultados/experimentos/combinada_exat_2_dia_turno/historico.json
+```
+
+### Progressoes entre dia/turno + curso e conjuntos de ate 2 cursos
+
+O modo `dia_turno_curso_cursos_progr_ate_2` executa tres etapas sequenciais:
+
+1. `dia_turno_curso`, repetida ate uma passada completa sem melhoria;
+2. `curso`, repetida ate uma passada completa sem melhoria;
+3. `par_cursos`, repetida ate uma passada completa sem melhoria.
+
+O modo inverso `cursos_progr_ate_2_dia_turno_curso` executa:
+
+1. `curso`, repetida ate uma passada completa sem melhoria;
+2. `par_cursos`, repetida ate uma passada completa sem melhoria;
+3. `dia_turno_curso`, repetida ate uma passada completa sem melhoria.
+
+Cada etapa recebe a melhor solucao em memoria da etapa anterior. A busca nao
+retorna a uma etapa ja concluida. `--ordem-cursos` e `--seed` controlam as etapas
+de um e dois cursos; `dia_turno_curso` preserva sua ordem cronologica e
+alfabetica. O limite total pode interromper qualquer passada e
+`--apenas-uma-passada` executa somente a primeira passada da primeira etapa.
+
+Exemplo:
+
+```bash
+uv run alocador-salas-fixopt \
+  --tipo-vizinhanca dia_turno_curso_cursos_progr_ate_2 \
+  --ordem-cursos alfabetica \
+  --tempo-modelo 180 --tempo-heuristica 180 \
+  --tempo-subproblema 600 --tempo-total 14400 \
+  --salvar-solucao resultados/experimentos/progr_ate_2/melhor_solucao.sol \
+  --log-csv resultados/experimentos/progr_ate_2/historico.csv \
+  --log-json resultados/experimentos/progr_ate_2/historico.json
+```
+
+O modo inverso usa o mesmo comando, alterando apenas o tipo:
+
+```bash
+uv run alocador-salas-fixopt \
+  --tipo-vizinhanca cursos_progr_ate_2_dia_turno_curso \
+  --ordem-cursos alfabetica \
+  --tempo-modelo 180 --tempo-heuristica 180 \
+  --tempo-subproblema 600 --tempo-total 14400
+```
+
+O historico registra `etapa_no_fluxo`, `nome_etapa`, `passada_na_etapa` e
+`etapa_completa`. Os parametros registram a sequencia, o tipo progressivo e a
+quantidade de etapas concluidas.
+
 ### Hibridizacao de dia/turno + curso com pares de cursos
 
 Os modos `hibrida_dia_turno_curso_pares` e `hibrida_pares_dia_turno_curso`
 executam uma passada completa de cada tipo, na ordem indicada pelo nome.
+A etapa de pares repete a passada enquanto a anterior gerar alguma melhoria,
+antes de avancar para a proxima etapa ou concluir o ciclo.
 A segunda etapa recebe a melhor solucao em memoria e acontece mesmo quando
 nao ha melhoria na primeira. Um novo ciclo comeca se qualquer etapa melhorar;
 um ciclo completo sem melhoria encerra a busca. O limite total pode interromper

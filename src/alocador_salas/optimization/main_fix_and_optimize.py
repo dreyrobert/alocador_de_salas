@@ -42,7 +42,26 @@ SEQUENCIAS_HIBRIDAS = {
     "hibrida_dia_turno_curso_pares": ("dia_turno_curso", "par_cursos"),
     "hibrida_pares_dia_turno_curso": ("par_cursos", "dia_turno_curso"),
 }
-TIPOS_VIZINHANCA = {"curso", "curso_pares", "dia_turno", "dia_turno_curso", "hibrida"} | set(SEQUENCIAS_HIBRIDAS)
+VIZINHANCA_COMBINADA = "combinada_cursos_exat_2_dia_turno_curso"
+
+SEQUENCIAS_PROGRESSIVAS = {
+    "dia_turno_curso_cursos_progr_ate_2": (
+        "dia_turno_curso",
+        "curso",
+        "par_cursos",
+    ),
+    "cursos_progr_ate_2_dia_turno_curso": (
+        "curso",
+        "par_cursos",
+        "dia_turno_curso",
+    ),
+}
+TIPOS_VIZINHANCA = (
+    {"curso", "curso_pares", "dia_turno", "dia_turno_curso", "hibrida"}
+    | set(SEQUENCIAS_HIBRIDAS)
+    | set(SEQUENCIAS_PROGRESSIVAS)
+    | {VIZINHANCA_COMBINADA}
+)
 
 
 def parametros_primeira_solucao(
@@ -330,6 +349,9 @@ def executar_fix_and_optimize(
     """Executa fix-and-optimize com o tipo de vizinhanca selecionado."""
     tipos_validos = TIPOS_VIZINHANCA
     sequencia = SEQUENCIAS_HIBRIDAS.get(tipo_vizinhanca)
+    sequencia_progressiva = SEQUENCIAS_PROGRESSIVAS.get(tipo_vizinhanca)
+    sequencia_configurada = sequencia or sequencia_progressiva
+    vizinhanca_combinada = tipo_vizinhanca == VIZINHANCA_COMBINADA
     if tipo_vizinhanca not in tipos_validos:
         raise ValueError(
             f"Tipo de vizinhanca invalido: {tipo_vizinhanca}. "
@@ -360,7 +382,7 @@ def executar_fix_and_optimize(
         ),
         "seed_ordem_cursos": (
             seed_ordem_cursos
-            if (tipo_vizinhanca in {"curso", "curso_pares", "hibrida"} or sequencia) and ordem_cursos == "aleatoria"
+            if (tipo_vizinhanca in {"curso", "curso_pares", "hibrida"} or sequencia_configurada or vizinhanca_combinada) and ordem_cursos == "aleatoria"
             else None
         ),
         "arquivo_horarios": str(arquivo_horarios),
@@ -371,14 +393,23 @@ def executar_fix_and_optimize(
         "arquivo_log_csv": str(arquivo_log_csv),
         "arquivo_log_json": str(arquivo_log_json),
     }
-    if sequencia:
-        parametros_experimento["sequencia_etapas"] = " -> ".join(sequencia)
-        for posicao, tipo in enumerate(sequencia, 1):
+    if vizinhanca_combinada:
+        parametros_experimento.update({
+            "tipo_estrategia": "combinada",
+            "componentes": "cursos_exat_2 -> dia_turno_curso",
+            "criterio_repeticao": "qualquer_melhoria_na_passada",
+        })
+    if sequencia_configurada:
+        parametros_experimento["sequencia_etapas"] = " -> ".join(sequencia_configurada)
+        parametros_experimento["tipo_sequencia"] = (
+            "ciclica" if sequencia else "progressiva"
+        )
+        for posicao, tipo in enumerate(sequencia_configurada, 1):
             parametros_experimento[f"etapa_{posicao}_ordem_cursos"] = (
                 "alfabetica" if tipo == "dia_turno_curso" else ordem_cursos.replace("_", "-")
             )
             parametros_experimento[f"etapa_{posicao}_seed"] = (
-                seed_ordem_cursos if tipo == "par_cursos" and ordem_cursos == "aleatoria" else None
+                seed_ordem_cursos if tipo in {"curso", "par_cursos"} and ordem_cursos == "aleatoria" else None
             )
     for etapa_parametros, valores in (
         ("gurobi_inicial", parametros_primeira_solucao(tempo_modelo_inicial, tempo_heuristica_inicial)),
@@ -407,6 +438,7 @@ def executar_fix_and_optimize(
     melhorias_totais = 0
     status_execucao = "CONCLUIDO"
     ciclos_hibridos: list[dict] = []
+    etapas_concluidas_progressivas = 0
     motivo_encerramento = "ESTAGNACAO"
     obj_inicial = None
     obj_final = None
@@ -444,9 +476,10 @@ def executar_fix_and_optimize(
                 else tipo_vizinhanca
             )
 
-            if sequencia:
-                tipo_passada = sequencia[0]
+            if sequencia_configurada:
+                tipo_passada = sequencia_configurada[0]
             posicao_etapa = 1
+            passada_na_etapa = 1
             melhorias_ciclo = 0
             registro_ciclo = None
 
@@ -472,7 +505,37 @@ def executar_fix_and_optimize(
                     "tempo_fim_total": tempo_fim_total,
                     "salvar_candidatos": salvar_candidatos,
                 }
-                if tipo_passada == "curso":
+                if vizinhanca_combinada:
+                    argumentos_passada.pop("instancia")
+                    cursos_ordenados = ordenar_cursos(
+                        cursos,
+                        instancia.disciplinas,
+                        criterio=ordem_cursos,
+                        seed=seed_ordem_cursos,
+                    )
+                    vizinhancas_pares = vizinhancas_por_pares_cursos(
+                        instancia.disciplinas,
+                        cursos_ordenados,
+                    )
+                    vizinhancas_dia_turno_curso = (
+                        vizinhancas_por_dia_turno_curso(instancia.disciplinas)
+                    )
+                    vizinhancas_combinadas = (
+                        vizinhancas_pares + vizinhancas_dia_turno_curso
+                    )
+                    total_vizinhancas_passada = sum(
+                        bool(v.disciplinas_liberadas)
+                        for v in vizinhancas_combinadas
+                    )
+                    incumbente_passada, hist_passada = executar_passada_por_vizinhancas(
+                        vizinhancas=vizinhancas_combinadas,
+                        ordem_cursos=ordem_cursos.replace("_", "-"),
+                        seed_ordem_cursos=(
+                            seed_ordem_cursos if ordem_cursos == "aleatoria" else None
+                        ),
+                        **argumentos_passada,
+                    )
+                elif tipo_passada == "curso":
                     incumbente_passada, hist_passada = executar_passada_por_cursos(
                         cursos=list(cursos),
                         ordem_cursos=ordem_cursos,
@@ -512,6 +575,70 @@ def executar_fix_and_optimize(
                 incumbente_atual = incumbente_passada
                 passadas_feitas += 1
 
+                if vizinhanca_combinada:
+                    passada_completa = (
+                        len(hist_passada) == total_vizinhancas_passada
+                    )
+                    posicoes_componentes = {
+                        "par_cursos": 0,
+                        "dia_turno_curso": 0,
+                    }
+                    for posicao, registro in enumerate(hist_passada, 1):
+                        tipo_registro = registro["vizinhanca"]
+                        posicoes_componentes[tipo_registro] += 1
+                        registro.update(
+                            tipo_componente=(
+                                "cursos_exat_2"
+                                if tipo_registro == "par_cursos"
+                                else "dia_turno_curso"
+                            ),
+                            posicao_na_passada=posicao,
+                            posicao_no_componente=posicoes_componentes[tipo_registro],
+                            passada_completa=passada_completa,
+                        )
+                    if tempo_fim_total is not None and time.time() >= tempo_fim_total:
+                        motivo_encerramento = "TEMPO_TOTAL"
+                        break
+                    if apenas_uma_passada:
+                        motivo_encerramento = "APENAS_UMA_PASSADA"
+                        break
+                    if melhorias_na_passada == 0:
+                        motivo_encerramento = "ESTAGNACAO"
+                        break
+                    passada += 1
+                    continue
+
+                if sequencia_progressiva:
+                    etapa_completa = not (
+                        tempo_fim_total is not None and time.time() >= tempo_fim_total
+                    )
+                    for registro in hist_passada:
+                        registro.update(
+                            etapa_no_fluxo=posicao_etapa,
+                            nome_etapa=tipo_passada,
+                            passada_na_etapa=passada_na_etapa,
+                            etapa_completa=etapa_completa,
+                        )
+                    if not etapa_completa:
+                        motivo_encerramento = "TEMPO_TOTAL"
+                        break
+                    if apenas_uma_passada:
+                        motivo_encerramento = "APENAS_UMA_PASSADA"
+                        break
+                    if melhorias_na_passada > 0:
+                        passada += 1
+                        passada_na_etapa += 1
+                        continue
+                    etapas_concluidas_progressivas += 1
+                    if posicao_etapa == len(sequencia_progressiva):
+                        motivo_encerramento = "ESTAGNACAO"
+                        break
+                    posicao_etapa += 1
+                    tipo_passada = sequencia_progressiva[posicao_etapa - 1]
+                    passada += 1
+                    passada_na_etapa = 1
+                    continue
+
                 if sequencia:
                     etapa_completa = len(hist_passada) == sum(
                         bool(v.disciplinas_liberadas) for v in vizinhancas_etapa
@@ -527,6 +654,9 @@ def executar_fix_and_optimize(
                     if apenas_uma_passada:
                         motivo_encerramento = "APENAS_UMA_PASSADA"
                         break
+                    if tipo_passada == "par_cursos" and melhorias_na_passada > 0:
+                        passada += 1
+                        continue
                     if posicao_etapa == 2:
                         if melhorias_ciclo == 0:
                             motivo_encerramento = "CICLO_SEM_MELHORIA"
@@ -545,9 +675,9 @@ def executar_fix_and_optimize(
                     break
 
                 if tipo_vizinhanca == "curso_pares":
-                    # Uma unica passada de pares apos a estagnacao individual.
                     if tipo_passada == "par_cursos":
-                        break
+                        if melhorias_na_passada == 0:
+                            break
                     if melhorias_na_passada == 0:
                         if len(cursos) < 2:
                             break
@@ -579,6 +709,15 @@ def executar_fix_and_optimize(
             registro["motivo_encerramento"] = motivo_encerramento
         parametros_experimento["motivo_encerramento"] = motivo_encerramento
         parametros_experimento["ciclos_completos"] = sum(c["completo"] for c in ciclos_hibridos)
+    elif sequencia_progressiva:
+        for registro in historico_total:
+            registro["motivo_encerramento"] = motivo_encerramento
+        parametros_experimento["motivo_encerramento"] = motivo_encerramento
+        parametros_experimento["etapas_concluidas"] = etapas_concluidas_progressivas
+    elif vizinhanca_combinada:
+        for registro in historico_total:
+            registro["motivo_encerramento"] = motivo_encerramento
+        parametros_experimento["motivo_encerramento"] = motivo_encerramento
 
     if arquivo_log_csv:
         salvar_historico_csv(historico_total, arquivo_log_csv, parametros_experimento)
@@ -590,7 +729,13 @@ def executar_fix_and_optimize(
             "versao_formato": 2,
             "parametros": parametros_experimento,
             "historico": historico_total,
-            **({"ciclos": ciclos_hibridos, "motivo_encerramento": motivo_encerramento} if sequencia else {}),
+            **(
+                {"ciclos": ciclos_hibridos, "motivo_encerramento": motivo_encerramento}
+                if sequencia
+                else {"motivo_encerramento": motivo_encerramento}
+                if sequencia_progressiva or vizinhanca_combinada
+                else {}
+            ),
         }, indent=2, ensure_ascii=False), encoding="utf-8")
 
     tempo_total_exec = round(time.time() - t_inicio_total, 2)
@@ -602,7 +747,13 @@ def executar_fix_and_optimize(
         else f"fix_and_optimize_{tipo_vizinhanca}"
     )
     return {
-        **({"ciclos": ciclos_hibridos, "motivo_encerramento": motivo_encerramento} if sequencia else {}),
+        **(
+            {"ciclos": ciclos_hibridos, "motivo_encerramento": motivo_encerramento}
+            if sequencia
+            else {"motivo_encerramento": motivo_encerramento}
+            if sequencia_progressiva or vizinhanca_combinada
+            else {}
+        ),
         "etapa": etapa,
         "tipo_vizinhanca": tipo_vizinhanca,
         "status": status_execucao,
@@ -642,24 +793,25 @@ def main() -> dict:
     parser.add_argument("--tempo-subproblema", type=float, default=300)
     parser.add_argument("--tempo-total", type=float, default=None)
     parser.add_argument("--apenas-uma-passada", action="store_true",
-                        help="Executa somente a primeira passada; nas novas hibridas, somente a primeira etapa.")
+                        help="Executa somente a primeira passada, sem avancar para outra etapa.")
     parser.add_argument(
         "--tipo-vizinhanca",
         choices=sorted(TIPOS_VIZINHANCA),
         default="curso",
         help=(
-            "Escolhe vizinhancas por curso, curso_pares (cursos ate estagnar, "
-            "depois uma passada de todos os pares), por dia/turno, uniao dia/turno + curso "
-            "(cursos presentes no periodo, em ordem alfabetica) ou busca hibrida "
-            "(curso seguido de dia/turno quando houver estagnacao). As hibridas com pares "
-            "alternam duas passadas completas na ordem indicada e param apos um ciclo sem melhoria."
+            "Escolhe vizinhancas por curso, curso_pares (cursos e depois pares ate "
+            "estagnar), por dia/turno, uniao dia/turno + curso ou busca hibrida. "
+            "O modo combinado executa todos os pares e todos os dia_turno_curso "
+            "na mesma passada. Os modos progressivos executam dia_turno_curso "
+            "antes ou depois de curso e par_cursos, cada etapa ate estagnar. As "
+            "hibridas com pares alternam as etapas e param apos um ciclo sem melhoria."
         ),
     )
     parser.add_argument(
         "--ordem-cursos",
         choices=["alfabetica", "maior-demanda", "aleatoria"],
         default="alfabetica",
-        help="Define a ordem por curso nos tipos curso, curso_pares, hibrida e nas etapas de pares das novas hibridas; dia_turno_curso usa ordem alfabetica.",
+        help="Define a ordem nos modos por curso, pares, combinados e progressivos; dia_turno_curso usa ordem alfabetica.",
     )
     parser.add_argument(
         "--seed",
