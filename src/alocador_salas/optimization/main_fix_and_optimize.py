@@ -26,6 +26,7 @@ from alocador_salas.optimization.lns_fix_and_optimize import (
     vizinhancas_por_dia_turno,
     vizinhancas_por_dia_turno_curso,
     vizinhancas_por_pares_cursos,
+    vizinhancas_por_turno_cursos_pares,
 )
 
 ARQUIVO_HORARIOS_PADRAO = "./dados/2024_1/horarios_2024_1.xlsx"
@@ -43,11 +44,16 @@ SEQUENCIAS_HIBRIDAS = {
     "hibrida_pares_dia_turno_curso": ("par_cursos", "dia_turno_curso"),
 }
 VIZINHANCA_COMBINADA = "combinada_cursos_exat_2_dia_turno_curso"
+VIZINHANCA_TURNO_CURSO_DEPOIS_PARES = "turno_curso_depois_cursos_pares"
+VIZINHANCA_TURNO_CURSO_DEPOIS_PARES_LEGADO = "dia_turno_curso_cursos_progr_ate_2"
 
 SEQUENCIAS_PROGRESSIVAS = {
-    "dia_turno_curso_cursos_progr_ate_2": (
+    VIZINHANCA_TURNO_CURSO_DEPOIS_PARES: (
         "dia_turno_curso",
-        "curso",
+        "par_cursos",
+    ),
+    VIZINHANCA_TURNO_CURSO_DEPOIS_PARES_LEGADO: (
+        "dia_turno_curso",
         "par_cursos",
     ),
     "cursos_progr_ate_2_dia_turno_curso": (
@@ -57,7 +63,14 @@ SEQUENCIAS_PROGRESSIVAS = {
     ),
 }
 TIPOS_VIZINHANCA = (
-    {"curso", "curso_pares", "dia_turno", "dia_turno_curso", "hibrida"}
+    {
+        "curso",
+        "curso_pares",
+        "dia_turno",
+        "dia_turno_curso",
+        "hibrida",
+        "turno_cursos_pares",
+    }
     | set(SEQUENCIAS_HIBRIDAS)
     | set(SEQUENCIAS_PROGRESSIVAS)
     | {VIZINHANCA_COMBINADA}
@@ -236,6 +249,14 @@ def executar_passada_por_vizinhancas(
             registro["curso"] = curso
             registro["ordem_cursos"] = "alfabetica"
             registro["seed_ordem_cursos"] = None
+        elif vizinhanca.tipo == "turno_cursos_pares":
+            dia, turno, _cursos = vizinhanca.recurso.split("_", maxsplit=2)
+            registro["dia"] = int(dia)
+            registro["turno"] = turno
+            registro["curso_a"], registro["curso_b"] = vizinhanca.cursos
+            registro["ordem_cursos"] = "turno"
+            registro["seed_ordem_cursos"] = None
+            registro["posicao_par"] = idx
         historico_passada.append(registro)
 
     return incumbente_atual, historico_passada
@@ -376,7 +397,8 @@ def executar_fix_and_optimize(
         "ordem_cursos_solicitada": ordem_cursos,
         "seed_ordem_cursos_solicitada": seed_ordem_cursos,
         "ordem_cursos": (
-            "alfabetica" if tipo_vizinhanca == "dia_turno_curso"
+            "turno" if tipo_vizinhanca == "turno_cursos_pares"
+            else "alfabetica" if tipo_vizinhanca == "dia_turno_curso"
             else ordem_cursos.replace("_", "-") if tipo_vizinhanca != "dia_turno"
             else None
         ),
@@ -560,6 +582,15 @@ def executar_fix_and_optimize(
                 elif tipo_passada == "dia_turno_curso":
                     argumentos_passada.pop("instancia")
                     vizinhancas_etapa = vizinhancas_por_dia_turno_curso(instancia.disciplinas)
+                    incumbente_passada, hist_passada = executar_passada_por_vizinhancas(
+                        vizinhancas=vizinhancas_etapa,
+                        **argumentos_passada,
+                    )
+                elif tipo_passada == "turno_cursos_pares":
+                    argumentos_passada.pop("instancia")
+                    vizinhancas_etapa = vizinhancas_por_turno_cursos_pares(
+                        instancia.disciplinas
+                    )
                     incumbente_passada, hist_passada = executar_passada_por_vizinhancas(
                         vizinhancas=vizinhancas_etapa,
                         **argumentos_passada,
@@ -767,8 +798,18 @@ def executar_fix_and_optimize(
         "arquivo_melhor_solucao": str(caminho_melhor),
         "arquivo_log_csv": arquivo_log_csv,
         "arquivo_log_json": arquivo_log_json,
-        "ordem_cursos": "alfabetica" if tipo_vizinhanca == "dia_turno_curso" else ordem_cursos,
-        "seed_ordem_cursos": None if tipo_vizinhanca == "dia_turno_curso" else seed_ordem_cursos,
+        "ordem_cursos": (
+            "turno"
+            if tipo_vizinhanca == "turno_cursos_pares"
+            else "alfabetica"
+            if tipo_vizinhanca == "dia_turno_curso"
+            else ordem_cursos
+        ),
+        "seed_ordem_cursos": (
+            None
+            if tipo_vizinhanca in {"dia_turno_curso", "turno_cursos_pares"}
+            else seed_ordem_cursos
+        ),
         "historico": historico_total,
         "parametros": parametros_experimento,
     }
@@ -801,6 +842,7 @@ def main() -> dict:
         help=(
             "Escolhe vizinhancas por curso, curso_pares (cursos e depois pares ate "
             "estagnar), por dia/turno, uniao dia/turno + curso ou busca hibrida. "
+            "O modo turno_cursos_pares une cada dia/turno a dois cursos presentes nele. "
             "O modo combinado executa todos os pares e todos os dia_turno_curso "
             "na mesma passada. Os modos progressivos executam dia_turno_curso "
             "antes ou depois de curso e par_cursos, cada etapa ate estagnar. As "

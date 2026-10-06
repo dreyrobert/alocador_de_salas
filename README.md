@@ -79,6 +79,7 @@ uv run alocador-salas-fixopt --tipo-vizinhanca curso
 uv run alocador-salas-fixopt --tipo-vizinhanca curso_pares
 uv run alocador-salas-fixopt --tipo-vizinhanca dia_turno
 uv run alocador-salas-fixopt --tipo-vizinhanca dia_turno_curso
+uv run alocador-salas-fixopt --tipo-vizinhanca turno_cursos_pares
 uv run alocador-salas-fixopt --tipo-vizinhanca hibrida
 ```
 
@@ -102,8 +103,18 @@ com todas as disciplinas de um curso presente naquele periodo. As disciplinas
 sao liberadas por inteiro, incluindo aulas em outros dias e turnos. A passada
 percorre os dias e turnos em ordem cronologica e, dentro de cada periodo, os
 cursos em ordem alfabetica. Periodos vazios sao ignorados. `--ordem-cursos` e
-`--seed` se aplicam aos modos `curso`, `curso_pares` e `hibrida`; a nova vizinhanca usa ordem
-fixa. O historico registra dia, turno, curso, tamanhos, objetivos e tempos.
+`--seed` se aplicam aos modos `curso`, `curso_pares` e `hibrida`;
+`dia_turno_curso` usa ordem fixa. O historico registra dia, turno, curso,
+tamanhos, objetivos e tempos.
+
+No modo `turno_cursos_pares`, cada vizinhanca parte de um dia/turno e de um par
+de cursos distintos presentes naquele periodo. Ela libera todas as disciplinas
+do dia/turno e todas as disciplinas dos dois cursos, inclusive aulas desses
+cursos em outros periodos. A passada percorre dias e turnos em ordem
+cronologica e monta os pares pela ordem de primeira aparicao dos cursos no
+turno, considerando a faixa horaria e a ordem da instancia como desempate, sem
+duplicar o mesmo par por disciplinas diferentes. O historico registra dia,
+turno, `curso_a`, `curso_b`, `posicao_par`, tamanhos, objetivos e tempos.
 
 Novas execucoes de Fix-and-Optimize salvam automaticamente os parametros usados:
 limites de tempo em segundos, tipo de vizinhanca, ordem e seed solicitadas e
@@ -143,11 +154,10 @@ uv run alocador-salas-fixopt \
 
 ### Progressoes entre dia/turno + curso e conjuntos de ate 2 cursos
 
-O modo `dia_turno_curso_cursos_progr_ate_2` executa tres etapas sequenciais:
+O modo `turno_curso_depois_cursos_pares` executa duas etapas sequenciais:
 
 1. `dia_turno_curso`, repetida ate uma passada completa sem melhoria;
-2. `curso`, repetida ate uma passada completa sem melhoria;
-3. `par_cursos`, repetida ate uma passada completa sem melhoria.
+2. `par_cursos`, repetida ate uma passada completa sem melhoria.
 
 O modo inverso `cursos_progr_ate_2_dia_turno_curso` executa:
 
@@ -157,7 +167,7 @@ O modo inverso `cursos_progr_ate_2_dia_turno_curso` executa:
 
 Cada etapa recebe a melhor solucao em memoria da etapa anterior. A busca nao
 retorna a uma etapa ja concluida. `--ordem-cursos` e `--seed` controlam as etapas
-de um e dois cursos; `dia_turno_curso` preserva sua ordem cronologica e
+de pares e, no modo inverso, a etapa de curso individual; `dia_turno_curso` preserva sua ordem cronologica e
 alfabetica. O limite total pode interromper qualquer passada e
 `--apenas-uma-passada` executa somente a primeira passada da primeira etapa.
 
@@ -165,7 +175,7 @@ Exemplo:
 
 ```bash
 uv run alocador-salas-fixopt \
-  --tipo-vizinhanca dia_turno_curso_cursos_progr_ate_2 \
+  --tipo-vizinhanca turno_curso_depois_cursos_pares \
   --ordem-cursos alfabetica \
   --tempo-modelo 180 --tempo-heuristica 180 \
   --tempo-subproblema 600 --tempo-total 14400 \
@@ -187,6 +197,41 @@ uv run alocador-salas-fixopt \
 O historico registra `etapa_no_fluxo`, `nome_etapa`, `passada_na_etapa` e
 `etapa_completa`. Os parametros registram a sequencia, o tipo progressivo e a
 quantidade de etapas concluidas.
+
+### Script para experimentos por semestre
+
+Para rodar as vizinhancas principais de Fix-and-Optimize de um semestre em
+pastas separadas:
+
+```bash
+uv run python scripts/run_fixopt_semestre.py \
+  --semestre 2024_1 \
+  --tempo-modelo 180 --tempo-heuristica 180 \
+  --tempo-subproblema 600 --tempo-total 14400
+```
+
+Por padrao, o script procura:
+
+- `dados/<semestre>/horarios_<semestre>.xlsx`
+- `dados/<semestre>/salas_<semestre>.csv`
+- `dados/<semestre>/salas_preferenciais_<semestre com ponto>.xlsx`
+
+As saidas ficam em `resultados/experimentos/<semestre>/fixopt_vizinhancas/`,
+com uma pasta por experimento. Cada pasta recebe `melhor.sol`, `historico.csv`,
+`historico.json` e `execucao.out`. A pasta raiz recebe `resumo.csv` e
+`resumo.json`.
+
+O script roda:
+
+- `turno_curso_depois_cursos_pares`;
+- `prog_ate_2_depois_turno_curso`;
+- `aleatorio_cursos_pares_turno_cursos_nao_agrupado`;
+- `aleatorio_cursos_pares_turno_curso_agrupado`;
+- `turno_cursos_pares`.
+
+Use `--dry-run` para conferir os caminhos sem executar o Gurobi, `--somente`
+para rodar um experimento especifico, `--pular-existentes` para manter resultados
+ja gerados e `--seed` para controlar os modos aleatorios.
 
 ### Hibridizacao de dia/turno + curso com pares de cursos
 

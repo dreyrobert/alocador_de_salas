@@ -221,6 +221,80 @@ def vizinhancas_por_dia_turno_curso(disciplinas) -> list[Vizinhanca]:
     return vizinhancas
 
 
+def disciplinas_e_cursos_do_dia_turno_na_ordem(
+    disciplinas,
+    dia: int,
+    turno: Turno,
+) -> tuple[set[str], list[str]]:
+    """Retorna disciplinas do periodo e cursos pela primeira aparicao no turno."""
+    disciplinas_do_periodo: set[str] = set()
+    ocorrencias_cursos: list[tuple[int, int, str]] = []
+
+    for posicao_disciplina, (codigo, disciplina) in enumerate(disciplinas.items()):
+        faixas_no_periodo = [
+            horario.faixa
+            for horario in disciplina.horarios_agrupamento().values()
+            if horario.dia == dia and turno_da_faixa(horario.faixa) == turno
+        ]
+        if not faixas_no_periodo:
+            continue
+
+        disciplinas_do_periodo.add(codigo)
+        ocorrencias_cursos.append((
+            min(faixas_no_periodo),
+            posicao_disciplina,
+            disciplina.curso,
+        ))
+
+    cursos: list[str] = []
+    cursos_adicionados: set[str] = set()
+    for _, _, curso in sorted(ocorrencias_cursos):
+        if curso in cursos_adicionados:
+            continue
+        cursos.append(curso)
+        cursos_adicionados.add(curso)
+
+    return disciplinas_do_periodo, cursos
+
+
+def vizinhancas_por_turno_cursos_pares(disciplinas) -> list[Vizinhanca]:
+    """Une cada dia/turno aos cursos inteiros de dois cursos presentes nele.
+
+    Percorre dias e turnos em ordem cronologica. Em cada periodo, gera uma
+    vizinhanca por par de cursos distintos presentes no periodo, na ordem da
+    primeira aparicao no turno e sem duplicar o mesmo par por disciplinas
+    diferentes.
+    """
+    vizinhancas: list[Vizinhanca] = []
+    for dia in sorted(DIAS_VALIDOS):
+        for turno in TURNOS_VALIDOS:
+            disciplinas_do_periodo, cursos = disciplinas_e_cursos_do_dia_turno_na_ordem(
+                disciplinas,
+                dia,
+                turno,
+            )
+            if not disciplinas_do_periodo:
+                continue
+
+            recurso_periodo = f"{dia}_{turno}"
+            for curso_a, curso_b in combinations(cursos, 2):
+                vizinhancas.append(Vizinhanca(
+                    tipo="turno_cursos_pares",
+                    recurso=f"{recurso_periodo}_{curso_a}+{curso_b}",
+                    disciplinas_liberadas=frozenset(
+                        disciplinas_do_periodo
+                        | disciplinas_do_curso(disciplinas, curso_a)
+                        | disciplinas_do_curso(disciplinas, curso_b)
+                    ),
+                    cursos=(curso_a, curso_b),
+                    justificativa=(
+                        "Libera disciplinas inteiras do dia/turno e de dois cursos "
+                        "presentes no periodo, incluindo aulas nos demais periodos."
+                    ),
+                ))
+    return vizinhancas
+
+
 def aplicar_start_x(x_vars, solucao_x: SolucaoX) -> dict[str, int]:
     """Aplica MIP start nas variaveis x usando a solucao incumbente."""
     resumo = {

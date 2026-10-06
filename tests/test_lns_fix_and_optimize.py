@@ -27,6 +27,7 @@ from alocador_salas.optimization.lns_fix_and_optimize import (
     vizinhancas_por_dia_turno,
     vizinhancas_por_dia_turno_curso,
     vizinhancas_por_pares_cursos,
+    vizinhancas_por_turno_cursos_pares,
 )
 
 
@@ -266,6 +267,36 @@ class TestLnsFixAndOptimize(unittest.TestCase):
         self.assertIsNone(variaveis[("A1", "S1", "b")].LB)
         self.assertEqual(variaveis[("M1", "S1", "a")].LB, 1)
         self.assertEqual(vizinhancas_por_dia_turno_curso({}), [])
+
+    def test_turno_cursos_pares_une_periodo_e_dois_cursos_presentes(self):
+        disciplinas = {
+            "C1": DisciplinaFake("CC", 1, {"a": Horario(2, 1)}),
+            "C2": DisciplinaFake("CC", 1, {"a": Horario(3, 8)}),
+            "A1": DisciplinaFake("ADM", 1, {"a": Horario(2, 1)}),
+            "A2": DisciplinaFake("ADM", 1, {"a": Horario(4, 13)}),
+            "E1": DisciplinaFake("ENF", 1, {"a": Horario(2, 6)}),
+            "M1": DisciplinaFake("MAT", 1, {"a": Horario(2, 7)}),
+        }
+
+        vizinhancas = vizinhancas_por_turno_cursos_pares(disciplinas)
+
+        self.assertEqual(
+            [v.recurso for v in vizinhancas],
+            ["2_M_CC+ADM", "2_M_CC+ENF", "2_M_ADM+ENF"],
+        )
+        self.assertEqual(
+            [v.cursos for v in vizinhancas],
+            [("CC", "ADM"), ("CC", "ENF"), ("ADM", "ENF")],
+        )
+        self.assertEqual(
+            vizinhancas[0].disciplinas_liberadas,
+            {"C1", "C2", "A1", "A2", "E1"},
+        )
+        self.assertEqual(
+            vizinhancas[1].disciplinas_liberadas,
+            {"C1", "C2", "A1", "E1"},
+        )
+        self.assertEqual(vizinhancas_por_turno_cursos_pares({}), [])
 
     def test_aplica_start_e_fixa_variaveis_fora_da_vizinhanca(self):
         x_vars = {
