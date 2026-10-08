@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import time
 from pathlib import Path
 from typing import Callable
@@ -46,6 +47,7 @@ SEQUENCIAS_HIBRIDAS = {
 VIZINHANCA_COMBINADA = "combinada_cursos_exat_2_dia_turno_curso"
 VIZINHANCA_TURNO_CURSO_DEPOIS_PARES = "turno_curso_depois_cursos_pares"
 VIZINHANCA_TURNO_CURSO_DEPOIS_PARES_LEGADO = "dia_turno_curso_cursos_progr_ate_2"
+VIZINHANCA_COMBINADA_ALEATORIA = VIZINHANCA_COMBINADA + "_aleatoria"
 
 SEQUENCIAS_PROGRESSIVAS = {
     VIZINHANCA_TURNO_CURSO_DEPOIS_PARES: (
@@ -73,7 +75,7 @@ TIPOS_VIZINHANCA = (
     }
     | set(SEQUENCIAS_HIBRIDAS)
     | set(SEQUENCIAS_PROGRESSIVAS)
-    | {VIZINHANCA_COMBINADA}
+    | {VIZINHANCA_COMBINADA, VIZINHANCA_COMBINADA_ALEATORIA}
 )
 
 
@@ -372,7 +374,16 @@ def executar_fix_and_optimize(
     sequencia = SEQUENCIAS_HIBRIDAS.get(tipo_vizinhanca)
     sequencia_progressiva = SEQUENCIAS_PROGRESSIVAS.get(tipo_vizinhanca)
     sequencia_configurada = sequencia or sequencia_progressiva
-    vizinhanca_combinada = tipo_vizinhanca == VIZINHANCA_COMBINADA
+    combinada_aleatoria = tipo_vizinhanca == VIZINHANCA_COMBINADA_ALEATORIA
+    vizinhanca_combinada = tipo_vizinhanca in {
+        VIZINHANCA_COMBINADA, VIZINHANCA_COMBINADA_ALEATORIA,
+    }
+    seed_vizinhancas = None
+    gerador_vizinhancas = None
+    if combinada_aleatoria:
+        seed_vizinhancas = (seed_ordem_cursos if seed_ordem_cursos is not None
+                            else random.SystemRandom().getrandbits(64))
+        gerador_vizinhancas = random.Random(seed_vizinhancas)
     if tipo_vizinhanca not in tipos_validos:
         raise ValueError(
             f"Tipo de vizinhanca invalido: {tipo_vizinhanca}. "
@@ -420,6 +431,15 @@ def executar_fix_and_optimize(
             "tipo_estrategia": "combinada",
             "componentes": "cursos_exat_2 -> dia_turno_curso",
             "criterio_repeticao": "qualquer_melhoria_na_passada",
+        })
+    if combinada_aleatoria:
+        parametros_experimento.update({
+            "tipo_estrategia": "combinada_aleatoria",
+            "componentes": "cursos_exat_2 + dia_turno_curso",
+            "ordem_cursos": "alfabetica",
+            "seed_ordem_cursos": None,
+            "ordem_vizinhancas": "aleatoria_por_passada",
+            "seed_vizinhancas": seed_vizinhancas,
         })
     if sequencia_configurada:
         parametros_experimento["sequencia_etapas"] = " -> ".join(sequencia_configurada)
@@ -491,6 +511,15 @@ def executar_fix_and_optimize(
             motivo_encerramento = "SEM_SOLUCAO_INICIAL"
         else:
             cursos = cursos_da_instancia(instancia)
+            vizinhancas_base = None
+            if combinada_aleatoria:
+                vizinhancas_base = (
+                    vizinhancas_por_pares_cursos(
+                        instancia.disciplinas, ordenar_cursos(
+                            cursos, instancia.disciplinas, criterio="alfabetica",
+                        ),
+                    ) + vizinhancas_por_dia_turno_curso(instancia.disciplinas)
+                )
             passada = 1
             ciclo = 1
             tipo_passada = (
@@ -529,31 +558,35 @@ def executar_fix_and_optimize(
                 }
                 if vizinhanca_combinada:
                     argumentos_passada.pop("instancia")
-                    cursos_ordenados = ordenar_cursos(
-                        cursos,
-                        instancia.disciplinas,
-                        criterio=ordem_cursos,
-                        seed=seed_ordem_cursos,
-                    )
-                    vizinhancas_pares = vizinhancas_por_pares_cursos(
-                        instancia.disciplinas,
-                        cursos_ordenados,
-                    )
-                    vizinhancas_dia_turno_curso = (
-                        vizinhancas_por_dia_turno_curso(instancia.disciplinas)
-                    )
-                    vizinhancas_combinadas = (
-                        vizinhancas_pares + vizinhancas_dia_turno_curso
-                    )
+                    if combinada_aleatoria:
+                        vizinhancas_combinadas = list(vizinhancas_base)
+                        gerador_vizinhancas.shuffle(vizinhancas_combinadas)
+                    else:
+                        cursos_ordenados = ordenar_cursos(
+                            cursos,
+                            instancia.disciplinas,
+                            criterio=ordem_cursos,
+                            seed=seed_ordem_cursos,
+                        )
+                        vizinhancas_pares = vizinhancas_por_pares_cursos(
+                            instancia.disciplinas,
+                            cursos_ordenados,
+                        )
+                        vizinhancas_dia_turno_curso = (
+                            vizinhancas_por_dia_turno_curso(instancia.disciplinas)
+                        )
+                        vizinhancas_combinadas = (
+                            vizinhancas_pares + vizinhancas_dia_turno_curso
+                        )
                     total_vizinhancas_passada = sum(
                         bool(v.disciplinas_liberadas)
                         for v in vizinhancas_combinadas
                     )
                     incumbente_passada, hist_passada = executar_passada_por_vizinhancas(
                         vizinhancas=vizinhancas_combinadas,
-                        ordem_cursos=ordem_cursos.replace("_", "-"),
+                        ordem_cursos=("alfabetica" if combinada_aleatoria else ordem_cursos.replace("_", "-")),
                         seed_ordem_cursos=(
-                            seed_ordem_cursos if ordem_cursos == "aleatoria" else None
+                            seed_ordem_cursos if ordem_cursos == "aleatoria" and not combinada_aleatoria else None
                         ),
                         **argumentos_passada,
                     )
@@ -615,6 +648,11 @@ def executar_fix_and_optimize(
                         "dia_turno_curso": 0,
                     }
                     for posicao, registro in enumerate(hist_passada, 1):
+                        if combinada_aleatoria:
+                            registro.update(
+                                ordem_vizinhancas="aleatoria_por_passada",
+                                seed_vizinhancas=seed_vizinhancas,
+                            )
                         tipo_registro = registro["vizinhanca"]
                         posicoes_componentes[tipo_registro] += 1
                         registro.update(
@@ -798,16 +836,20 @@ def executar_fix_and_optimize(
         "arquivo_melhor_solucao": str(caminho_melhor),
         "arquivo_log_csv": arquivo_log_csv,
         "arquivo_log_json": arquivo_log_json,
+        **(
+            {"seed_vizinhancas": seed_vizinhancas, "ordem_vizinhancas": "aleatoria_por_passada"}
+            if combinada_aleatoria else {}
+        ),
         "ordem_cursos": (
             "turno"
             if tipo_vizinhanca == "turno_cursos_pares"
             else "alfabetica"
-            if tipo_vizinhanca == "dia_turno_curso"
+            if tipo_vizinhanca == "dia_turno_curso" or combinada_aleatoria
             else ordem_cursos
         ),
         "seed_ordem_cursos": (
             None
-            if tipo_vizinhanca in {"dia_turno_curso", "turno_cursos_pares"}
+            if tipo_vizinhanca in {"dia_turno_curso", "turno_cursos_pares"} or combinada_aleatoria
             else seed_ordem_cursos
         ),
         "historico": historico_total,
@@ -844,7 +886,7 @@ def main() -> dict:
             "estagnar), por dia/turno, uniao dia/turno + curso ou busca hibrida. "
             "O modo turno_cursos_pares une cada dia/turno a dois cursos presentes nele. "
             "O modo combinado executa todos os pares e todos os dia_turno_curso "
-            "na mesma passada. Os modos progressivos executam dia_turno_curso "
+            "na mesma passada; a variante _aleatoria embaralha a lista conjunta a cada passada. Os modos progressivos executam dia_turno_curso "
             "antes ou depois de curso e par_cursos, cada etapa ate estagnar. As "
             "hibridas com pares alternam as etapas e param apos um ciclo sem melhoria."
         ),
@@ -853,13 +895,13 @@ def main() -> dict:
         "--ordem-cursos",
         choices=["alfabetica", "maior-demanda", "aleatoria"],
         default="alfabetica",
-        help="Define a ordem nos modos por curso, pares, combinados e progressivos; dia_turno_curso usa ordem alfabetica.",
+        help="Define a ordem nos modos por curso, pares, combinados e progressivos; dia_turno_curso usa ordem alfabetica; a combinada aleatoria usa uma lista base alfabetica e ignora esta opcao.",
     )
     parser.add_argument(
         "--seed",
         type=int,
         default=None,
-        help="Seed usada quando --ordem-cursos aleatoria.",
+        help="Seed da ordem dos cursos ou, na combinada aleatoria, do embaralhamento das vizinhancas. Nesta variante, se omitida, uma seed e gerada e registrada.",
     )
     parser.add_argument("--log-csv", default=ARQUIVO_HISTORICO_CSV_PADRAO)
     parser.add_argument("--log-json", default=ARQUIVO_HISTORICO_JSON_PADRAO)

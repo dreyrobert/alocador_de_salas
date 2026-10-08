@@ -2,14 +2,27 @@
 
 Esta pasta guarda os arquivos de entrada usados pelo modelo e pelos scripts.
 
-## `2024_1/`
+## `<semestre>/`
 
-Dados padrao usados atualmente por `alocador_salas.optimization.solve`,
-`alocador_salas.optimization.main_fix_and_optimize` e scripts de experimento.
+Cada semestre tem sua propria pasta: `2022_1/`, `2022_2/`, `2023_1/`,
+`2023_2/` e `2024_1/`.
 
-## `historico/`
+Os arquivos seguem o padrao:
 
-Arquivos de semestres anteriores, incluindo entradas e solucoes conhecidas.
+- `horarios_<semestre>.xlsx`
+- `salas_<semestre>.csv`
+- `salas_preferenciais_<ano>.<periodo>.xlsx`
+- `solucao_<semestre>.xlsx`, quando houver uma solucao conhecida.
+
+Os comandos individuais usam `2024_1` como padrao. Para rodar a bateria de
+experimentos de outro semestre, execute na raiz do projeto, por exemplo:
+
+```bash
+uv run python scripts/run_fixopt_semestre.py --semestre 2022_1
+```
+
+Para novos semestres, crie a pasta e adicione as tres entradas seguindo os
+nomes acima. O script encontra os caminhos automaticamente.
 
 ## `exemplos/`
 

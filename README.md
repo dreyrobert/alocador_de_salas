@@ -44,8 +44,7 @@ Com as dependências instaladas podemos partir para a configuração da aplicaç
 
 #  Estrutura de pastas
 
--  `dados/2024_1/`: dados de entrada padrao usados pelos scripts atuais.
--  `dados/historico/`: dados e solucoes de semestres anteriores.
+-  `dados/<semestre>/`: entradas de cada semestre (`2022_1`, `2022_2`, `2023_1`, `2023_2` e `2024_1`) e solucoes conhecidas, quando disponiveis. Os scripts usam `2024_1` como padrao.
 -  `dados/exemplos/`: arquivos pequenos usados para testes manuais.
 -  `src/alocador_salas/`: pacote Python com dominio, dados, otimizacao,
    relatorios e validacao.
@@ -150,6 +149,52 @@ uv run alocador-salas-fixopt \
   --salvar-solucao resultados/experimentos/combinada_exat_2_dia_turno/melhor.sol \
   --log-csv resultados/experimentos/combinada_exat_2_dia_turno/historico.csv \
   --log-json resultados/experimentos/combinada_exat_2_dia_turno/historico.json
+```
+
+### Passada combinada com ordem aleatoria
+
+O modo `combinada_cursos_exat_2_dia_turno_curso_aleatoria` monta uma lista
+com todos os pares distintos de cursos e todas as vizinhancas `dia_turno_curso`,
+sem etapa de cursos individuais. A cada passada, embaralha uma copia dessa
+lista e executa cada vizinhanca uma unica vez. Os tipos podem se intercalar,
+mas nao ha alternancia obrigatoria. Disciplinas podem aparecer em diferentes
+vizinhancas; o que nao se repete na passada e a mesma vizinhanca.
+
+Cada melhoria atualiza a incumbente para a proxima iteracao. Se houver qualquer
+melhoria, uma nova passada e sorteada; uma passada completa sem melhoria encerra
+a busca. O limite total e `--apenas-uma-passada` continuam sendo respeitados.
+
+`--seed` controla o embaralhamento conjunto. O gerador e criado uma unica vez,
+sem reiniciar entre passadas. A mesma seed e instancia reproduzem a sequencia
+de ordens sorteadas, mas nao garantem os mesmos resultados do solver sob limite
+de tempo. Um novo sorteio pode, por coincidencia, repetir uma ordem; nao ha
+restricao artificial para impedir isso. Sem `--seed`, uma seed e gerada e salva.
+`--ordem-cursos` nao altera esta variante: a lista base usa cursos em ordem
+alfabetica antes do embaralhamento conjunto.
+
+JSON, CSV e resultado final registram `seed_vizinhancas` e
+`ordem_vizinhancas=aleatoria_por_passada`. O historico registra o tipo, recurso,
+passada, posicao de execucao, melhoria e `passada_completa`, inclusive quando o
+limite interrompe uma passada. `seed_ordem_cursos` fica nula nesta variante.
+
+Exemplo para macOS, com pasta exclusiva por execucao e log sem buffer:
+
+```bash
+pasta_experimento="resultados/experimentos/2024_1/novas_hibridas/combinada_aleatoria/$(date +%Y%m%d_%H%M%S)_seed42"
+mkdir -p "$pasta_experimento"
+(
+  set -o pipefail
+  echo RODANDO
+  PYTHONUNBUFFERED=1 /usr/bin/caffeinate -i .venv/bin/python -m alocador_salas.optimization.main_fix_and_optimize \
+    --tipo-vizinhanca combinada_cursos_exat_2_dia_turno_curso_aleatoria \
+    --seed 42 \
+    --tempo-modelo 180 --tempo-heuristica 180 \
+    --tempo-subproblema 600 --tempo-total 14400 \
+    --salvar-solucao "$pasta_experimento/melhor.sol" \
+    --log-csv "$pasta_experimento/historico.csv" \
+    --log-json "$pasta_experimento/historico.json" \
+    && echo FINALIZADO || { echo ERRO; exit 1; }
+) 2>&1 | tee "$pasta_experimento/execucao.out"
 ```
 
 ### Progressoes entre dia/turno + curso e conjuntos de ate 2 cursos

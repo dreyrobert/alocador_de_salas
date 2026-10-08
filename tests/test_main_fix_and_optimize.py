@@ -1,5 +1,6 @@
 import csv
 import json
+import random
 import tempfile
 import unittest
 import time
@@ -114,6 +115,12 @@ class TestMainFixAndOptimize(unittest.TestCase):
                     self.assertTrue(registro["curso_b"])
             dados = json.loads((Path(temp_dir) / "log.json").read_text())
             self.assertEqual(dados["historico"], resultado["historico"])
+            if "seed_vizinhancas" in resultado:
+                self.assertEqual(dados["parametros"]["seed_vizinhancas"], resultado["seed_vizinhancas"])
+                for linha, registro in zip(registros_csv, resultado["historico"]):
+                    self.assertEqual(linha["seed_vizinhancas"], str(registro["seed_vizinhancas"]))
+                    self.assertEqual(linha["posicao_na_passada"], str(registro["posicao_na_passada"]))
+                    self.assertEqual(linha["ordem_vizinhancas"], "aleatoria_por_passada")
             if "ciclos" in resultado:
                 self.assertEqual(dados["ciclos"], resultado["ciclos"])
                 self.assertEqual(dados["motivo_encerramento"], resultado["motivo_encerramento"])
@@ -250,6 +257,70 @@ class TestMainFixAndOptimize(unittest.TestCase):
         )
         self.assertEqual(r["passadas_executadas"], 1)
         self.assertEqual(r["motivo_encerramento"], "ESTAGNACAO")
+
+    def test_combinada_aleatoria_cobertura_ordem_e_reprodutibilidade(self):
+        modo = "combinada_cursos_exat_2_dia_turno_curso_aleatoria"
+        base, *_ = self.executar_curso_pares_fake(
+            [100] * 8, tipo_vizinhanca="combinada_cursos_exat_2_dia_turno_curso",
+        )
+        identidade = lambda h: (h["vizinhanca"], h["recurso"])
+        lista_base = [identidade(h) for h in base["historico"]]
+        gerador = random.Random(42)
+        esperadas = []
+        for _ in range(2):
+            ordem = lista_base.copy()
+            gerador.shuffle(ordem)
+            esperadas.append(ordem)
+        self.assertNotEqual(esperadas[0], esperadas[1])
+        for tipo in ("par_cursos", "dia_turno_curso"):
+            indice = next(i for i, item in enumerate(esperadas[0], 1) if item[0] == tipo)
+            objetivos = [100] * indice + [90] * (15 - indice)
+            resultados = []
+            for _ in range(2):
+                r, preparacoes, solucoes, _ = self.executar_curso_pares_fake(
+                    objetivos, tipo_vizinhanca=modo, seed_ordem_cursos=42,
+                )
+                resultados.append(r)
+                self.assertEqual(r["motivo_encerramento"], "ESTAGNACAO")
+                self.assertEqual(r["passadas_executadas"], 2)
+                self.assertIs(preparacoes[indice]["solucao_incumbente_x"], solucoes[indice])
+                for passada in (1, 2):
+                    registros = [h for h in r["historico"] if h["passada"] == passada]
+                    ordem = [identidade(h) for h in registros]
+                    self.assertEqual(ordem, esperadas[passada - 1])
+                    self.assertCountEqual(ordem, lista_base)
+                    self.assertEqual(len(set(ordem)), len(lista_base))
+                    self.assertEqual([h["posicao_na_passada"] for h in registros], list(range(1, 8)))
+                    self.assertTrue(all(h["passada_completa"] for h in registros))
+                    self.assertTrue(all(h["seed_vizinhancas"] == 42 for h in registros))
+                self.assertEqual(r["parametros"]["seed_vizinhancas"], 42)
+                self.assertIsNone(r["parametros"]["seed_ordem_cursos"])
+            self.assertEqual(resultados[0]["historico"], resultados[1]["historico"])
+
+    def test_combinada_aleatoria_paradas(self):
+        modo = "combinada_cursos_exat_2_dia_turno_curso_aleatoria"
+        for opcoes, objetivos, motivo, completa in (
+            ({"apenas_uma_passada": True}, [100] + [90] * 7, "APENAS_UMA_PASSADA", True),
+            ({"tempo_total_maximo": 10, "encerrar_apos": 2}, [100, 90], "TEMPO_TOTAL", False),
+            ({}, [100] * 8, "ESTAGNACAO", True),
+        ):
+            with self.subTest(motivo=motivo):
+                r, *_ = self.executar_curso_pares_fake(
+                    objetivos, tipo_vizinhanca=modo, seed_ordem_cursos=42, **opcoes,
+                )
+                self.assertEqual(r["motivo_encerramento"], motivo)
+                self.assertEqual(r["passadas_executadas"], 1)
+                self.assertTrue(all(h["passada_completa"] == completa for h in r["historico"]))
+                self.assertEqual(r["total_iteracoes"], 7 if completa else 1)
+
+    def test_combinada_aleatoria_seed_gerada_pode_ser_reutilizada(self):
+        modo = "combinada_cursos_exat_2_dia_turno_curso_aleatoria"
+        r, *_ = self.executar_curso_pares_fake([100] * 8, tipo_vizinhanca=modo)
+        self.assertIsInstance(r["seed_vizinhancas"], int)
+        repeticao, *_ = self.executar_curso_pares_fake(
+            [100] * 8, tipo_vizinhanca=modo, seed_ordem_cursos=r["seed_vizinhancas"],
+        )
+        self.assertEqual(r["historico"], repeticao["historico"])
 
     def test_fluxo_progressivo_executa_cada_etapa_ate_estagnar(self):
         objetivos = (
@@ -1023,6 +1094,12 @@ class TestMainFixAndOptimize(unittest.TestCase):
             dados = json.loads((Path(temp_dir) / "historico.json").read_text())
             parametros = dados["parametros"]
             self.assertEqual(dados["historico"], resultado["historico"])
+            if "seed_vizinhancas" in resultado:
+                self.assertEqual(dados["parametros"]["seed_vizinhancas"], resultado["seed_vizinhancas"])
+                for linha, registro in zip(registros_csv, resultado["historico"]):
+                    self.assertEqual(linha["seed_vizinhancas"], str(registro["seed_vizinhancas"]))
+                    self.assertEqual(linha["posicao_na_passada"], str(registro["posicao_na_passada"]))
+                    self.assertEqual(linha["ordem_vizinhancas"], "aleatoria_por_passada")
             self.assertEqual(parametros, resultado["parametros"])
             self.assertEqual(parametros["tempo_modelo_inicial_s"], 180)
             self.assertEqual(parametros["tempo_heuristica_inicial_s"], 180)
