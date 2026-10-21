@@ -21,6 +21,12 @@ experimentos de outro semestre, execute na raiz do projeto, por exemplo:
 uv run python scripts/run_fixopt_semestre.py --semestre 2022_1
 ```
 
+A coluna `vagas` dos horários define a demanda usada na restrição de capacidade
+das salas. Quando a coluna não existe ou a célula está vazia, o leitor assume
+**25 alunos por turma**, conforme a hipótese usada no código histórico. Valores
+informados, inclusive zero, são preservados. Os 25 alunos são uma hipótese de
+experimentação, não uma quantidade observada nesses semestres.
+
 Para novos semestres, crie a pasta e adicione as tres entradas seguindo os
 nomes acima. O script encontra os caminhos automaticamente.
 

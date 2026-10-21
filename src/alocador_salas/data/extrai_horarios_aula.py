@@ -107,8 +107,14 @@ class ExtraiHorariosAula:
         periodo_map["T"]=6
         periodo_map["N"]=12
         controleTurmas=dict()
-        # TODO Tratar o caso em que os dados de entrada nao contem a coluna 'vagas'
-        dados = pd.read_excel(self.arquivoHorarios, usecols=['cod','ch_ccr','curso', 'fase', 'horario', 'vagas', 'nome_ccr'])
+        dados = pd.read_excel(self.arquivoHorarios)
+        # Hipótese histórica: 25 alunos quando não há demanda informada.
+        # Zero é um valor informado e não deve ser substituído.
+        if 'vagas' not in dados.columns:
+            dados['vagas'] = 25
+        else:
+            dados['vagas'] = dados['vagas'].replace(r'^\s*$', float('nan'), regex=True).fillna(25)
+        dados = dados[['cod', 'ch_ccr', 'curso', 'fase', 'horario', 'vagas', 'nome_ccr']]
 
         for indice, linha in dados.iterrows():
             

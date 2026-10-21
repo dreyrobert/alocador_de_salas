@@ -259,6 +259,34 @@ class TestExtraiHorariosAula(unittest.TestCase):
         self.assertEqual(fases["CC_3"].curso, "CC")
         self.assertIn("CC", cursos)
 
+    def test_vagas_ausentes_ou_vazias_usam_25_e_preservam_valores_informados(self):
+        import pandas as pd
+        from alocador_salas.data.extrai_horarios_aula import ExtraiHorariosAula
+
+        for valores, esperado in [
+            (None, [25, 25]),
+            ([None, 40], [25, 40]),
+            ([35, None], [35, 25]),
+            ([0, 35], [0, 35]),
+            (["   ", 35], [25, 35]),
+        ]:
+            with self.subTest(valores=valores), tempfile.TemporaryDirectory() as pasta:
+                horarios, preferenciais = self.escreve_planilhas(pasta)
+                dados = pd.read_excel(horarios)
+                if valores is None:
+                    dados = dados.drop(columns=['vagas'])
+                else:
+                    dados['vagas'] = valores
+                dados.to_excel(horarios, index=False)
+                with redirect_stdout(StringIO()):
+                    disciplinas, *_ = ExtraiHorariosAula(
+                        str(horarios), str(preferenciais)
+                    ).extrai_horarios_aula()
+                self.assertEqual(
+                    [disciplinas[cod].alunos for cod in ['GEX001_1', 'GEX002_1']],
+                    esperado,
+                )
+
     def test_identifica_sobreposicao_de_horario_e_periodo(self):
         from alocador_salas.data.extrai_horarios_aula import ExtraiHorariosAula
 
