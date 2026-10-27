@@ -19,7 +19,7 @@ class ExtraiHorariosAula:
     
     def cria_fases(self):
         fases=dict()
-        cursos=["ADM","AGRO","CC","CS","ENF","EAS","FIL","GEO","HIS","LET","MAT","MED","PED"]
+        cursos=["ADM","AGRO","CC","CS","ENF","EAS","ECV","FIL","GEO","HIS","LET","MAT","MED","PED","FUS","PIN","PROI","CE","PECG","EEI"]
         for curso in cursos:
             for i in range(11):
                 fases[(curso+"_"+str(i))]=Fase(curso,i)
@@ -114,18 +114,16 @@ class ExtraiHorariosAula:
             dados['vagas'] = 25
         else:
             dados['vagas'] = dados['vagas'].replace(r'^\s*$', float('nan'), regex=True).fillna(25)
-        dados = dados[['cod', 'ch_ccr', 'curso', 'fase', 'horario', 'vagas', 'nome_ccr']]
+        # TODO Tratar o caso em que os dados de entrada nao contem a coluna 'num_turma'
+        dados = dados[['cod', 'ch_ccr', 'curso', 'fase', 'horario', 'vagas', 'num_turma', 'nome_ccr']]
 
         for indice, linha in dados.iterrows():
             
             codigo = linha['cod']
 
-            # O arquivo com os dados sobre as disciplinas não contem o "número" da turma
-            # Então o trecho de código abaixo fica responsável por gerar esse numer artificialmente
-            if(codigo in controleTurmas):
-                controleTurmas[codigo]= controleTurmas[codigo]+1
-            else:
-                controleTurmas[codigo]=1
+            controleTurmas[codigo] = linha['num_turma']
+            if (codigo+"_"+str(controleTurmas[codigo])) in disciplinas:
+                raise ValueError(f"Os dados da turma {codigo}_{controleTurmas[codigo]} foram lidos duas vezes")
 
             # Pegamos apenas o primeiro valor da fase
             fase = linha['fase']
@@ -211,6 +209,7 @@ class ExtraiHorariosAula:
             verifica_chave=0
             vai_agrupar=0
             if(nome_curso not in cursos_nao_agrupar and codigo not in codigos_nao_agrupar and vai_agrupar==0 and verifica_chave==0 and int(fase[0])!=0 and fusao==0):
+                # TODO Rever este tratamento para o curso de AGRONOMIA
                 if(nome_curso=="AGRONOMIA"):
                     chave_agrupamento=codigo+"_"+periodo+"_"+dia
                 else:
@@ -254,6 +253,10 @@ class ExtraiHorariosAula:
                     disciplina.agrupamento.append(disciplinas[agrupamentos[chave_agrupamento]])
                     disciplinas[disciplina.cod]=disciplina
                     del(disciplinas[agrupamentos[chave_agrupamento]])
+
+                    chave=nome_curso+"_"+str(int(fase[0]))+"_"+str(string_todos_horarios_aula)
+                    agrupamentos[chave]=codigo+"_"+str(controleTurmas[codigo])
+                    del(agrupamentos[chave_agrupamento])
                 # print("===")
                 # print("")
 
