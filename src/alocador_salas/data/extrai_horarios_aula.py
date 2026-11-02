@@ -19,11 +19,12 @@ class ExtraiHorariosAula:
     
     def cria_fases(self):
         fases=dict()
-        cursos=["ADM","AGRO","CC","CS","ENF","EAS","FIL","GEO","HIS","LET","MAT","MED","PED"]
+        cursos=["ADM","AGRO","CC","CS","ENF","EAS","ECV","FIL","GEO","HIS","LET","MAT","MED","PED","FUS","PIN","PROI","CE","PECG","EEI"]
         for curso in cursos:
             for i in range(11):
                 fases[(curso+"_"+str(i))]=Fase(curso,i)
-        fases[(curso+"_"+str(12))]=Fase("MEDICINA",int(12))
+        for fase in (11, 12):
+            fases[f"MED_{fase}"] = Fase("MED", fase)
         return fases,cursos
 
     # Pega as salas preferenciais do arquivo.
@@ -107,6 +108,7 @@ class ExtraiHorariosAula:
         periodo_map["T"]=6
         periodo_map["N"]=12
         controleTurmas=dict()
+        identificadores_lidos = set()
         dados = pd.read_excel(self.arquivoHorarios)
         # Hipótese histórica: 25 alunos quando não há demanda informada.
         # Zero é um valor informado e não deve ser substituído.
@@ -114,18 +116,33 @@ class ExtraiHorariosAula:
             dados['vagas'] = 25
         else:
             dados['vagas'] = dados['vagas'].replace(r'^\s*$', float('nan'), regex=True).fillna(25)
-        dados = dados[['cod', 'ch_ccr', 'curso', 'fase', 'horario', 'vagas', 'nome_ccr']]
+        colunas = ['cod', 'ch_ccr', 'curso', 'fase', 'horario', 'vagas', 'nome_ccr']
+        if 'num_turma' in dados.columns:
+            colunas.append('num_turma')
+        dados = dados[colunas]
 
         for indice, linha in dados.iterrows():
             
             codigo = linha['cod']
 
-            # O arquivo com os dados sobre as disciplinas não contem o "número" da turma
-            # Então o trecho de código abaixo fica responsável por gerar esse numer artificialmente
-            if(codigo in controleTurmas):
-                controleTurmas[codigo]= controleTurmas[codigo]+1
+            if 'num_turma' in dados.columns:
+                valor = linha['num_turma']
+                try:
+                    numero = float(valor)
+                    turma = int(numero)
+                    if isinstance(valor, bool) or numero != turma or turma <= 0:
+                        raise ValueError
+                except (TypeError, ValueError, OverflowError):
+                    raise ValueError(
+                        f"num_turma invalido para {codigo} na linha {indice + 2}: {valor!r}"
+                    ) from None
+                controleTurmas[codigo] = turma
             else:
-                controleTurmas[codigo]=1
+                controleTurmas[codigo] = controleTurmas.get(codigo, 0) + 1
+            identificador = f"{codigo}_{controleTurmas[codigo]}"
+            if identificador in identificadores_lidos:
+                raise ValueError(f"Os dados da turma {identificador} foram lidos duas vezes")
+            identificadores_lidos.add(identificador)
 
             # Pegamos apenas o primeiro valor da fase
             fase = linha['fase']
@@ -228,8 +245,12 @@ class ExtraiHorariosAula:
                         continue
 
                     for horario in todos_horarios_aula:
-                        if horario in horario_chave:
-                            if(not self.tem_alguma_sobreposicao(disciplina.periodoDuracao,disciplinas[agrupamentos[chave]].periodoDuracao)):
+                        if self.verifica_sobreposicao_horario_aula(horario, horario_chave):
+                            representante = disciplinas[agrupamentos[chave]]
+                            membros = [representante, *representante.agrupamento]
+                            if not any(self.tem_alguma_sobreposicao(
+                                disciplina.periodoDuracao, membro.periodoDuracao
+                            ) for membro in membros):
                                 print("Agrupamento!")
                                 vai_agrupar=1
                                 verifica_chave=1
@@ -251,9 +272,17 @@ class ExtraiHorariosAula:
                 if((len(disciplinas[agrupamentos[chave_agrupamento]].horarios))>=len(disciplina.horarios)):
                     disciplinas[agrupamentos[chave_agrupamento]].agrupamento.append(disciplina)
                 else:
-                    disciplina.agrupamento.append(disciplinas[agrupamentos[chave_agrupamento]])
+                    anterior = disciplinas[agrupamentos[chave_agrupamento]]
+                    disciplina.agrupamento.extend([anterior, *anterior.agrupamento])
+                    anterior.agrupamento = []
                     disciplinas[disciplina.cod]=disciplina
-                    del(disciplinas[agrupamentos[chave_agrupamento]])
+                    codigo_anterior = agrupamentos[chave_agrupamento]
+                    del(disciplinas[codigo_anterior])
+                    # O representante mudou; as proximas turmas devem consultar
+                    # a disciplina que continua presente no dicionario.
+                    for chave, representante in agrupamentos.items():
+                        if representante == codigo_anterior:
+                            agrupamentos[chave] = disciplina.cod
                 # print("===")
                 # print("")
 

@@ -49,13 +49,21 @@ class Disciplina:
         abreviacao["CIÊNCIAS SOCIAIS"]="CS"
         abreviacao["ENFERMAGEM"]="ENF"
         abreviacao["ENGENHARIA AMBIENTAL E SANITÁRIA"]="EAS"
+        abreviacao["ENGENHARIA CIVIL"]="ECV"
         abreviacao["FILOSOFIA"]="FIL"
         abreviacao["GEOGRAFIA"]="GEO"
         abreviacao["HISTÓRIA"]="HIS"
         abreviacao["LETRAS"]="LET"
+        abreviacao["LETRAS - PORTUGUÊS E ESPANHOL"]="LET"
         abreviacao["MATEMÁTICA"]="MAT"
         abreviacao["MEDICINA"]="MED"
         abreviacao["PEDAGOGIA"]="PED"
+        abreviacao["FUSÃO"]="FUS"
+        abreviacao["PIN"]="PIN"
+        abreviacao["PROIMIGRANTE"]="PROI"
+        abreviacao["CIÊNCIAS ECONÔMICAS"]="CE"
+        abreviacao["PECG"]="PECG"
+        abreviacao["EDUCAÇÃO ESPECIAL INCLUSIVA"]="EEI"
         if curso in abreviacao:
             return abreviacao[curso]
         else: # no caso das optativas
