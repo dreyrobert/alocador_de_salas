@@ -5,7 +5,7 @@ Esta pasta guarda os arquivos de entrada usados pelo modelo e pelos scripts.
 ## `<semestre>/`
 
 Cada semestre tem sua propria pasta: `2022_1/`, `2022_2/`, `2023_1/`,
-`2023_2/` e `2024_1/`.
+`2023_2/`, `2024_1/`, `2024_2/`, `2025_1/`, `2025_2/`, `2026_1/` e `2026_2/`.
 
 Os arquivos seguem o padrao:
 
@@ -29,6 +29,16 @@ experimentação, não uma quantidade observada nesses semestres.
 
 Para novos semestres, crie a pasta e adicione as tres entradas seguindo os
 nomes acima. O script encontra os caminhos automaticamente.
+
+Quando a planilha de horários possui `num_turma`, o identificador usado é
+`<cod>_<num_turma>`. O número deve ser um inteiro positivo e o par
+`(cod, num_turma)` não pode se repetir, mesmo em disciplinas agrupadas.
+Se a coluna não existir, o leitor mantém a numeração histórica por ordem de
+ocorrência de cada código. Células vazias em uma coluna existente são erros.
+
+As bases de `2024_2` em diante possuem `num_turma`. Soluções geradas antes
+desse suporte precisam ter a correspondência das turmas verificada antes de
+serem reutilizadas, pois o contador antigo pode atribuir o mesmo ID a outra turma.
 
 ## `exemplos/`
 
