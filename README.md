@@ -278,6 +278,64 @@ Use `--dry-run` para conferir os caminhos sem executar o Gurobi, `--somente`
 para rodar um experimento especifico, `--pular-existentes` para manter resultados
 ja gerados e `--seed` para controlar os modos aleatorios.
 
+### PLI por semestre (comparacao com as heuristicas)
+
+Para executar somente o modelo completo, com todas as restricoes e sem
+Fix-and-Optimize:
+
+```bash
+uv run python scripts/run_pli_semestre.py --semestre 2024_1
+```
+
+Para rodar varios semestres na mesma chamada, informe a lista:
+
+```bash
+uv run python scripts/run_pli_semestre.py \
+  --semestre 2024_1 2024_2 2025_1 2025_2
+```
+
+Eles rodam em sequencia, na ordem informada, com **4 horas para cada semestre**
+(quatro semestres: ate 16 horas de solver, mais leitura e montagem).
+`--tempo-total` altera o limite individual de cada semestre. Tambem e possivel
+repetir `--semestre`; valores duplicados rodam uma unica vez.
+O script confere todas as entradas e pastas de saida antes de iniciar a bateria.
+Se uma execucao do solver falhar, registra o erro e segue para o proximo semestre;
+ao final, retorna codigo 1 se houve falha. Os caminhos individuais
+`--horarios`, `--salas` e `--preferenciais` aceitam somente um semestre por chamada.
+
+O limite padrao e **4 horas (14400 segundos)**, confirmado nos logs historicos
+`resultados/experimentos/2024_1/pli/total4h_base/pli_base_4h.out` e
+`resultados/experimentos/2024_1/pli/total4h_mipfocus1_norel5min/pli_mipfocus_norel_4h.out`.
+O `solve.py` possui um padrao interno de 7 horas, que este script substitui
+explicitamente. Para usar 7 horas, passe `--tempo-total 25200`.
+O limite e aplicado ao `optimize()`; leitura dos dados e montagem do modelo
+ficam fora desse tempo. O resumo registra tambem o tempo total externo.
+
+As entradas seguem a mesma convencao do script das heuristicas. Use
+`--raiz-dados`, `--horarios`, `--salas` e `--preferenciais` para outros caminhos.
+As saidas ficam em `resultados/experimentos/<semestre>/pli/modelo_completo/`:
+`configuracao.json`, `execucao.out`, `gurobi.log`, `resumo.json`, `resumo.csv`
+e `melhor.sol` (quando houver solucao). O resumo inclui objetivo, bound, gap,
+status do solver, tempos e parametros. Em caso de falha, ha tambem `erro.txt`
+e o script retorna codigo 1. Nao sao geradas planilhas na pasta web.
+
+Por padrao, usa `MIPFocus=0`, `NoRelHeurTime=0` e `Seed=0` do Gurobi.
+Para repetir a configuracao historica com foco em viabilidade e 5 minutos
+de NoRel, em outra pasta de resultados:
+
+```bash
+uv run python scripts/run_pli_semestre.py --semestre 2024_1 \
+  --mipfocus 1 --tempo-heuristica 300 \
+  --saida resultados/pli_mipfocus1_norel5min
+```
+
+Use `--dry-run` para conferir o plano sem executar o solver e
+`--pular-existentes` para pular execucoes ja concluidas. Pastas nao vazias
+nao sao sobrescritas; use `--saida` para uma nova bateria. Para comparar
+com as heuristicas, mantenha os mesmos dados, restricoes e orcamento de
+tempo, e registre os parametros de cada metodo. `TIME_LIMIT` indica o
+encerramento pelo limite, sem comprovar otimalidade.
+
 ### Hibridizacao de dia/turno + curso com pares de cursos
 
 Os modos `hibrida_dia_turno_curso_pares` e `hibrida_pares_dia_turno_curso`
