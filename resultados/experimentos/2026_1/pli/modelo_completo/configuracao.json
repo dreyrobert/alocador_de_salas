@@ -1,0 +1,16 @@
+{
+  "semestre": "2026_1",
+  "entradas": {
+    "horarios": "dados/2026_1/horarios_2026_1.xlsx",
+    "salas": "dados/2026_1/salas_2026_1.csv",
+    "preferenciais": "dados/2026_1/salas_preferenciais_2026.1.xlsx"
+  },
+  "pasta_saida": "resultados/experimentos/2026_1/pli/modelo_completo",
+  "parametros_gurobi": {
+    "TimeLimit": 14400,
+    "MIPFocus": 0,
+    "NoRelHeurTime": 0,
+    "Seed": 0,
+    "LogFile": "resultados/experimentos/2026_1/pli/modelo_completo/gurobi.log"
+  }
+}

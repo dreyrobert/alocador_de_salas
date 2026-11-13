@@ -1,0 +1,32 @@
+[
+  {
+    "semestre": "2025_1",
+    "entradas": {
+      "horarios": "dados/2025_1/horarios_2025_1.xlsx",
+      "salas": "dados/2025_1/salas_2025_1.csv",
+      "preferenciais": "dados/2025_1/salas_preferenciais_2025.1.xlsx"
+    },
+    "pasta_saida": "resultados/experimentos/2025_1/pli/modelo_completo",
+    "parametros_gurobi": {
+      "TimeLimit": 14400,
+      "MIPFocus": 0,
+      "NoRelHeurTime": 0,
+      "Seed": 0,
+      "LogFile": "resultados/experimentos/2025_1/pli/modelo_completo/gurobi.log"
+    },
+    "status_execucao_script": "CONCLUIDO",
+    "status": 9,
+    "status_nome": "TIME_LIMIT",
+    "solucoes": 9,
+    "objetivo": 563187.5,
+    "bound": 305607.1604935536,
+    "gap": 0.45736160604851206,
+    "tempo": 14401.641242980957,
+    "tempo_solver_s": 14401.641242980957,
+    "restricoes_removidas": [],
+    "arquivo_solucao": "resultados/experimentos/2025_1/pli/modelo_completo/melhor.sol",
+    "lns": null,
+    "disciplinas_livres": [],
+    "tempo_total_s": 14458.090770310955
+  }
+]
